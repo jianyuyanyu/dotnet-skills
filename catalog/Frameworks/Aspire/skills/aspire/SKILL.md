@@ -1,7 +1,7 @@
 ---
 name: aspire
-description: "Build, upgrade, and operate .NET Aspire 13.2.x application hosts with current CLI, AppHost, ServiceDefaults, integrations, dashboard, testing, and Azure deployment patterns for distributed apps. USE FOR: Aspire.AppHost.Sdk, Aspire.Hosting.*, DistributedApplication.CreateBuilder, WithReference, WaitFor, AddProject, AddRedis, AddPostgres, aspire run, aspire init, aspire. DO NOT USE FOR: unrelated stacks; generic tasks that do not need this specific guidance. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
-compatibility: "Best for current Aspire 13.2.x tooling on .NET 10; use version-aware upgrade guidance for older 8.x or 9.x Aspire solutions."
+description: "Build, upgrade, and operate .NET Aspire 13.3.x application hosts with current CLI, AppHost, ServiceDefaults, integrations, dashboard, testing, and Azure deployment patterns for distributed apps. USE FOR: Aspire.AppHost.Sdk, Aspire.Hosting.*, DistributedApplication.CreateBuilder, WithReference, WaitFor, AddProject, AddRedis, AddPostgres, aspire run, aspire init, aspire. DO NOT USE FOR: unrelated stacks; generic tasks that do not need this specific guidance. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
+compatibility: "Best for current Aspire 13.3.x tooling on .NET 10; use version-aware upgrade guidance for older 8.x or 9.x Aspire solutions."
 ---
 
 # .NET Aspire
@@ -20,7 +20,7 @@ compatibility: "Best for current Aspire 13.2.x tooling on .NET 10; use version-a
 
 1. Classify the task first: new AppHost creation, existing-solution enlistment, integration wiring, testing and observability, deployment, or version upgrade.
 2. Prefer the current Aspire toolchain. For greenfield or modernized work, use the Aspire CLI and current AppHost SDK instead of writing new guidance around the deprecated legacy workload.
-3. Treat 13.2.x releases as servicing and feature updates for the current CLI-first app model, not a topology rewrite. Keep the Aspire CLI, `Aspire.AppHost.Sdk`, and closely coupled hosting or testing packages on the same line, then rerun the AppHost and deployment checks after `aspire update`.
+3. Treat 13.3.x releases as servicing and feature updates for the current CLI-first app model, not a topology rewrite. Keep the Aspire CLI, `Aspire.AppHost.Sdk`, and closely coupled hosting or testing packages on the same line, then rerun the AppHost and deployment checks after `aspire update`.
 4. Keep the AppHost code-first and topology-focused. Model services, resources, dependencies, endpoints, lifetimes, and parameters there; keep business logic out.
 5. Keep `ServiceDefaults` narrow. It exists for telemetry, health checks, resilience, and service discovery, not shared domain models or general utility code.
 6. Prefer official first-party Aspire integrations when they cover the requirement. Use `CommunityToolkit/Aspire` only when the capability gap is real: unsupported language hosts, extra dev infrastructure, or extension packages the official project does not provide.
@@ -67,13 +67,13 @@ flowchart LR
 ## Official Sources
 
 - [Aspire docs home](https://aspire.dev/docs/)
-- [What's new in Aspire 13.2](https://aspire.dev/whats-new/aspire-13-2/)
+- [What's new in Aspire 13.3](https://aspire.dev/whats-new/aspire-13-3/)
 - [AppHost](https://aspire.dev/get-started/app-host/)
 - [Service defaults](https://aspire.dev/fundamentals/service-defaults/)
 - [Integrations overview](https://aspire.dev/integrations/overview/)
 - [Build your first app](https://aspire.dev/get-started/first-app/)
 - [Aspire CLI reference](https://aspire.dev/reference/cli/commands/aspire/)
-- [Upgrade Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/get-started/upgrade-to-aspire-13)
+- [Aspire 13.3 release](https://github.com/microsoft/aspire/releases/tag/v13.3.0)
 - [Testing overview](https://aspire.dev/testing/overview/)
 - [microsoft/aspire](https://github.com/microsoft/aspire)
 - [CommunityToolkit/Aspire](https://github.com/CommunityToolkit/Aspire)

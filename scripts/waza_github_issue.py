@@ -78,6 +78,12 @@ def build_issue_body(report: dict[str, Any], markdown_report: str) -> str:
     run = run_url()
     run_line = f"- Workflow run: {run}" if run else "- Workflow run: unavailable outside GitHub Actions"
     issue_breakdown = ", ".join(f"`{code}`: {count}" for code, count in issue_counts.most_common()) or "none"
+    actionable_count = int(report.get("repoBadSkills") or 0)
+    intro = (
+        "Waza found actionable repo-owned catalog skill-quality warnings in CI."
+        if actionable_count > 0
+        else "Waza did not find actionable repo-owned catalog skill-quality warnings in CI."
+    )
 
     top_rows = []
     for skill in bad_skills[:20]:
@@ -100,7 +106,8 @@ def build_issue_body(report: dict[str, Any], markdown_report: str) -> str:
             BODY_MARKER,
             "# Waza skill quality findings",
             "",
-            "Waza found catalog skill-quality warnings in CI.",
+            intro,
+            "Imported upstream warnings are included in the report artifact but are tracked through upstream sync instead of a repo-local issue.",
             "",
             "## Summary",
             "",
@@ -179,7 +186,7 @@ def sync_issue(repo: str, title: str, label: str, body: str, has_findings: bool)
 
     if not has_findings:
         if issue_number is None:
-            print("No Waza findings and no open Waza issue to close.")
+            print("No actionable repo-owned Waza findings and no open Waza issue to close.")
             return
         run_gh(
             [
@@ -189,10 +196,10 @@ def sync_issue(repo: str, title: str, label: str, body: str, has_findings: bool)
                 "--repo",
                 repo,
                 "--comment",
-                "Waza skill quality is clean in the latest CI run.",
+                "Waza repo-owned skill quality is clean in the latest CI run. Imported upstream warnings remain report-only and are tracked through upstream sync.",
             ]
         )
-        print(f"Closed Waza issue #{issue_number}; latest report is clean.")
+        print(f"Closed Waza issue #{issue_number}; latest repo-owned report is clean.")
         return
 
     body_path = write_temp_body(body)
@@ -234,6 +241,10 @@ def sync_issue(repo: str, title: str, label: str, body: str, has_findings: bool)
         body_path.unlink(missing_ok=True)
 
 
+def has_actionable_findings(report: dict[str, Any]) -> bool:
+    return int(report.get("repoBadSkills") or 0) > 0
+
+
 def main() -> int:
     args = parse_args()
     if not args.repo and not args.dry_run:
@@ -246,7 +257,7 @@ def main() -> int:
 
     markdown_report = args.report_md.read_text(encoding="utf-8") if args.report_md.exists() else ""
     body = build_issue_body(report, markdown_report)
-    has_findings = int(report.get("badSkills") or 0) > 0
+    has_findings = has_actionable_findings(report)
 
     if args.dry_run:
         print(body)

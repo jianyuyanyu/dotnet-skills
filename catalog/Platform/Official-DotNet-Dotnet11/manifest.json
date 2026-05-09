@@ -1,0 +1,9 @@
+{
+  "name": "dotnet11",
+  "title": "Official .NET skills: dotnet11",
+  "description": "Skills for .NET 11 APIs and language features.",
+  "links": {
+    "repository": "https://github.com/dotnet/skills",
+    "docs": "https://github.com/dotnet/skills/tree/main/plugins/dotnet11"
+  }
+}

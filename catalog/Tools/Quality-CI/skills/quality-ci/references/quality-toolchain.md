@@ -124,7 +124,7 @@ dotnet stryker
 
 ## Sources
 
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
 - [Overview of .NET source code analysis](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)
 - [Configuration files for code analysis rules](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-files)
 - [CA1502: Avoid excessive complexity](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca1502)

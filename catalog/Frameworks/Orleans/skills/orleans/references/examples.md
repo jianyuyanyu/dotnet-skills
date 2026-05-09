@@ -35,7 +35,7 @@ Use this reference when the user needs an example-first entry point instead of c
 ## Streams, Observers, And Real-Time
 
 - [Chat Room sample](https://learn.microsoft.com/samples/dotnet/samples/orleans-chat-room-sample)
-- [Streaming pub/sub with Azure Event Hubs](https://learn.microsoft.com/samples/dotnet/samples/orleans-streaming-pubsub-with-azure-event-hub)
+- [Streaming pub/sub with Azure Event Hubs](https://learn.microsoft.com/samples/dotnet/samples/orleans-streaming-samples/)
 - [Chirper social sample](https://learn.microsoft.com/samples/dotnet/samples/orleans-chirper-social-media-sample-app)
 - [GPS Tracker with SignalR](https://learn.microsoft.com/samples/dotnet/samples/orleans-gps-device-tracker-sample)
 

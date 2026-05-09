@@ -450,7 +450,7 @@ Add caching to speed up workflow runs:
 - [actions/cache](https://github.com/actions/cache)
 - [github/codeql-action](https://github.com/github/codeql-action)
 - [dotnet test command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-test)
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
 - [ReportGenerator](https://github.com/danielpalme/ReportGenerator)
 - [Stryker.NET](https://github.com/stryker-mutator/stryker-net)
 - [ReSharper command line tools](https://www.jetbrains.com/help/resharper/ReSharper_Command_Line_Tools.html)

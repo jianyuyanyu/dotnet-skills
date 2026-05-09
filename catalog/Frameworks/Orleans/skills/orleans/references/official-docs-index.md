@@ -195,7 +195,7 @@ This skill keeps a live-link map for Orleans instead of a mirrored local docs sn
 - [Blazor WebAssembly sample](https://learn.microsoft.com/samples/dotnet/samples/orleans-aspnet-core-blazor-wasm-sample)
 - [Stocks sample](https://learn.microsoft.com/samples/dotnet/samples/orleans-stocks-sample-app)
 - [Transport Layer Security sample](https://learn.microsoft.com/samples/dotnet/samples/orleans-transport-layer-security-tls)
-- [Streaming with Azure Event Hubs](https://learn.microsoft.com/samples/dotnet/samples/orleans-streaming-pubsub-with-azure-event-hub)
+- [Streaming with Azure Event Hubs](https://learn.microsoft.com/samples/dotnet/samples/orleans-streaming-samples/)
 
 ## GitHub Source Entry Points
 

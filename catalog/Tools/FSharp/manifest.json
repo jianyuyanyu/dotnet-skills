@@ -1,0 +1,9 @@
+{
+  "name": "FSharp",
+  "title": "F#",
+  "description": "F# language and F# Interactive guidance for .NET repositories.",
+  "links": {
+    "docs": "https://learn.microsoft.com/dotnet/fsharp/",
+    "repository": "https://github.com/dotnet/fsharp"
+  }
+}

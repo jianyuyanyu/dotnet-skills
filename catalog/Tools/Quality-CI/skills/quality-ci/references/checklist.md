@@ -212,6 +212,6 @@ dotnet test --filter "Category=Architecture"
 
 - [Overview of .NET source code analysis](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)
 - [Configuration files for code analysis rules](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-files)
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
 - [Code metrics values](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-values?view=vs-2022)
 - [GitHub Actions for .NET](https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-net)

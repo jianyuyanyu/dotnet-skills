@@ -183,5 +183,5 @@ dotnet format analyzers --diagnostics IDE0005 --severity warn
 
 ## Sources
 
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
 - [Code style rule options](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/code-style-rule-options)

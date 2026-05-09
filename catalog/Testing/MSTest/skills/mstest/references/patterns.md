@@ -510,5 +510,5 @@ public class PrioritizedTests
 
 - [DataRow attribute](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-mstest-writing-tests#data-driven-tests)
 - [Test lifecycle attributes](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-mstest-writing-tests#test-lifecycle)
-- [Parallel test execution](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-mstest-configure-execution#parallelize-tests)
+- [Parallel test execution](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-mstest-writing-tests-controlling-execution#parallelization-attributes)
 - [Assert classes](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-mstest-writing-tests#assertions)

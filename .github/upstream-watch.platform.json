@@ -55,6 +55,20 @@
       ]
     },
     {
+      "id": "fsharp-overview-docs",
+      "source": "https://learn.microsoft.com/dotnet/fsharp/what-is-fsharp",
+      "skills": [
+        "fsharp"
+      ]
+    },
+    {
+      "id": "fsharp-interactive-docs",
+      "source": "https://learn.microsoft.com/dotnet/fsharp/tools/fsharp-interactive/",
+      "skills": [
+        "fsi"
+      ]
+    },
+    {
       "id": "aspnetcore-overview-docs",
       "source": "https://learn.microsoft.com/aspnet/core/overview?view=aspnetcore-10.0",
       "skills": [

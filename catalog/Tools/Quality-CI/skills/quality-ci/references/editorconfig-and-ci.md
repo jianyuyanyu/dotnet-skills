@@ -40,6 +40,6 @@ Use this reference when the repository needs one durable source of truth for for
 
 ## Sources
 
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
 - [Configuration files for code analysis rules](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-files)
 - [Overview of .NET source code analysis](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)

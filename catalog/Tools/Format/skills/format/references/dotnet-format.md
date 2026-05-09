@@ -42,4 +42,4 @@ dotnet format analyzers MySolution.sln --verify-no-changes
 
 ## Sources
 
-- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/format)
+- [dotnet format command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-format)
