@@ -4,7 +4,7 @@ using SpectreConsole = Spectre.Console.AnsiConsole;
 
 namespace ManagedCode.DotnetSkills;
 
-internal sealed class InteractiveConsoleApp
+internal sealed partial class InteractiveConsoleApp
 {
     private readonly IInteractivePrompts prompts;
     private readonly Func<bool, string?, string?, bool, Task<SkillCatalogPackage>> loadSkillCatalogAsync;
@@ -46,7 +46,12 @@ internal sealed class InteractiveConsoleApp
 
     internal InteractiveSessionState Session { get; }
 
-    public async Task<int> RunAsync()
+    /// <summary>
+    /// Legacy prompt-first interactive shell (Spectre <see cref="Spectre.Console.SelectionPrompt{T}"/> based).
+    /// Retained as a fallback for non-interactive terminals; the default surface is the
+    /// SharpConsoleUI command center (see <c>InteractiveConsoleApp.Shell.cs</c>).
+    /// </summary>
+    public async Task<int> RunClassicShellAsync()
     {
         toolUpdateStatus = await getToolUpdateStatusAsync(cachePath);
         await LoadCatalogsAsync(refreshCatalog: false);
