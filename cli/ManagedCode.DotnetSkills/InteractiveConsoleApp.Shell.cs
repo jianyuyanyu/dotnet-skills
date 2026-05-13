@@ -707,22 +707,46 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList("Installed skills (Enter for details)")
-            .MaxVisibleItems(14)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        // Real sortable TableControl — columns can be sorted by clicking the header. Per-row
+        // foreground color flags outdated rows yellow without needing markup escaping per cell.
+        var table = Controls.Table()
+            .WithTitle("Installed skills (Enter for details)")
+            .AddColumn("Status", TextJustification.Center, width: 8)
+            .AddColumn("Skill")
+            .AddColumn("Collection")
+            .AddColumn("Lane")
+            .AddColumn("Installed", TextJustification.Right)
+            .AddColumn("Latest", TextJustification.Right)
+            .AddColumn("Tokens", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentGreen);
         foreach (var record in filtered)
         {
-            // Escape: the label contains "[stack / lane]" which would otherwise be parsed as markup.
-            list.AddItem((record.IsCurrent ? "✓ " : "↻ ") + Escape(BuildInstalledSkillChoiceLabel(record)), record);
-        }
-        list.OnItemActivated((_, item) =>
-        {
-            if (item.Tag is InstalledSkillRecord record)
+            var row = new TableRow(
+                record.IsCurrent ? "✓ current" : "↻ update",
+                ToAlias(record.Skill.Name),
+                record.Skill.Stack,
+                record.Skill.Lane,
+                record.InstalledVersion,
+                record.Skill.Version,
+                FormatTokenCount(record.Skill.TokenCount))
             {
-                ShowInstalledSkillModal(ws, panel, record);
+                Tag = record,
+                ForegroundColor = record.IsCurrent ? null : AccentYellow,
+            };
+            table.AddRow(row);
+        }
+        // RowActivated fires on Enter or double-click; index is into the filtered array because
+        // we appended rows in the same order.
+        table.OnRowActivated((_, idx) =>
+        {
+            if (idx >= 0 && idx < filtered.Length)
+            {
+                ShowInstalledSkillModal(ws, panel, filtered[idx]);
             }
         });
-        panel.AddControl(list.Build());
+        panel.AddControl(table.Build());
 
         if (outdated.Length > 0)
         {
@@ -1277,21 +1301,63 @@ internal sealed partial class InteractiveConsoleApp
             $"[grey50]skills[/] {view.SkillCount}  [grey50]installed[/] {view.InstalledCount}  [grey50]tokens[/] {FormatTokenCount(view.TokenCount)}")).ToList();
         panel.AddControl(BuildCardGrid(collectionCards, maxColumns: 3));
 
-        var heavyList = StyledList("Heaviest skills (Enter for details)")
-            .MaxVisibleItems(12)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        var heavyTable = Controls.Table()
+            .WithTitle("Heaviest skills (Enter for details)")
+            .AddColumn("Skill")
+            .AddColumn("Collection")
+            .AddColumn("Lane")
+            .AddColumn("Tokens", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentDeepSkyBlue);
         foreach (var skill in heaviest)
         {
-            heavyList.AddItem($"{FormatTokenCount(skill.TokenCount)} tokens  ·  {Escape(ToAlias(skill.Name))}  [dim]{Escape(skill.Stack)}[/]", skill);
+            heavyTable.AddRow(new TableRow(ToAlias(skill.Name), skill.Stack, skill.Lane, FormatTokenCount(skill.TokenCount)) { Tag = skill });
         }
-        heavyList.OnItemActivated((_, item) =>
+        heavyTable.OnRowActivated((_, idx) =>
         {
-            if (item.Tag is SkillEntry skill)
+            if (idx >= 0 && idx < heaviest.Length)
             {
-                ShowSkillDetailModal(ws, panel, skill);
+                ShowSkillDetailModal(ws, panel, heaviest[idx]);
             }
         });
-        panel.AddControl(heavyList.Build());
+        panel.AddControl(heavyTable.Build());
+
+        // Native bar charts: skills sorted by tokens (heaviest 12), then collections sorted by
+        // skill count (top 8). Each bar uses the standard threshold gradient so the eye picks
+        // up "big" entries immediately.
+        if (heaviest.Length > 0)
+        {
+            var maxTokens = heaviest.Max(s => s.TokenCount);
+            var chart1 = new ScrollablePanelControl
+            {
+                ShowScrollbar = false,
+                EnableMouseWheel = false,
+            };
+            foreach (var skill in heaviest)
+            {
+                chart1.AddControl(BuildSkillTokenBar(skill, maxTokens));
+            }
+            panel.AddControl(BuildSectionPanel("tokens by skill (top 12)", string.Empty, AccentDeepSkyBlue));
+            panel.AddControl(chart1);
+        }
+
+        var topCollections = views.Take(8).ToArray();
+        if (topCollections.Length > 0)
+        {
+            var maxCount = topCollections.Max(v => v.SkillCount);
+            var chart2 = new ScrollablePanelControl
+            {
+                ShowScrollbar = false,
+                EnableMouseWheel = false,
+            };
+            foreach (var view in topCollections)
+            {
+                chart2.AddControl(BuildCollectionCountBar(view, maxCount));
+            }
+            panel.AddControl(BuildSectionPanel("skills per collection (top 8)", string.Empty, AccentTurquoise));
+            panel.AddControl(chart2);
+        }
 
         if (signals.Count > 0)
         {
@@ -1300,6 +1366,36 @@ internal sealed partial class InteractiveConsoleApp
             panel.AddControl(BuildBulletPanel("package signals", AccentTurquoise, signalLines));
         }
     }
+
+    /// <summary>
+    /// A horizontal bar showing one skill's token weight against the chart's max. Color follows
+    /// a green→yellow→red threshold gradient so heavy skills stand out visually.
+    /// </summary>
+    private static BarGraphControl BuildSkillTokenBar(SkillEntry skill, int maxTokens)
+        => Controls.BarGraph()
+            .WithLabel($"{ToAlias(skill.Name)}")
+            .WithLabelWidth(28)
+            .WithValue(skill.TokenCount)
+            .WithMaxValue(maxTokens == 0 ? 1 : maxTokens)
+            .WithValueFormat("N0")
+            .ShowValue(true)
+            .WithStandardGradient()
+            .Build();
+
+    /// <summary>
+    /// A horizontal bar showing one collection's skill count against the chart's max. Uses the
+    /// turquoise accent for the filled portion.
+    /// </summary>
+    private static BarGraphControl BuildCollectionCountBar(CollectionCatalogView view, int maxCount)
+        => Controls.BarGraph()
+            .WithLabel(view.Collection)
+            .WithLabelWidth(28)
+            .WithValue(view.SkillCount)
+            .WithMaxValue(maxCount == 0 ? 1 : maxCount)
+            .WithValueFormat("0")
+            .ShowValue(true)
+            .WithFilledColor(AccentTurquoise)
+            .Build();
 
     // -------------------------------------------------------------------------
     // Remove all / Update all action pages
