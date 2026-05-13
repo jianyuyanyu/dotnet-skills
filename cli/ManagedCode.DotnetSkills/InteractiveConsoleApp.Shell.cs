@@ -1,12 +1,13 @@
 // -----------------------------------------------------------------------------
 // SharpConsoleUI command center — the retained-mode, windowed interactive shell.
 //
-// This is the default surface for the bare `dotnet skills` (and `agents`)
-// invocation. It replaces the prompt-first Spectre loop in
-// InteractiveConsoleApp.cs with a NavigationView-driven shell:
-//   * each former Show* screen is a NavigationView page
-//   * Spectre renderables built by the existing BuildRich* helpers are hosted
-//     in SpectreRenderableControl
+// This is the default surface for the bare `dotnet skills` invocation. (The
+// `agents` / `dotnet-agents` wrappers still dispatch their bare invocation to
+// the agents-list path in Program.cs; rerouting them through this command
+// center is intentionally a follow-up.) It replaces the prompt-first Spectre
+// loop in InteractiveConsoleApp.cs with a NavigationView-driven shell:
+//   * each former Show* screen is a NavigationView page rendered with native
+//     SharpConsoleUI controls (PanelControl + HorizontalGrid + MarkupControl)
 //   * SelectionPrompt/Confirm flows become ListControl activation + modal
 //     windows with ButtonControls
 //   * mutating actions call the Runtime installers directly and re-render the
@@ -23,8 +24,8 @@ using SharpConsoleUI.Controls;
 using SharpConsoleUI.Drivers;
 using SharpConsoleUI.Helpers;
 using SharpConsoleUI.Layout;
+using SharpConsoleUI.Rendering;
 using SharpConsoleUI.Themes;
-using SpectreRendering = Spectre.Console.Rendering;
 
 namespace ManagedCode.DotnetSkills;
 
@@ -41,6 +42,17 @@ internal sealed partial class InteractiveConsoleApp
     private static readonly Color UnfocusedSelectionFg = new(205, 218, 236);
     private static readonly Color ShortcutAccent = new(130, 205, 255);
 
+    // Accent palette — RGB equivalents of the xterm-256 color names this UI was originally
+    // designed around. Kept here so the palette has one canonical home.
+    private static readonly Color AccentDeepSkyBlue = new(0, 175, 255);    // Spectre "deepskyblue1"
+    private static readonly Color AccentTurquoise = new(0, 215, 215);      // Spectre "turquoise2"
+    private static readonly Color AccentMediumPurple = new(135, 95, 215);  // Spectre "mediumpurple2"
+    private static readonly Color AccentSpringGreen = new(0, 175, 95);     // Spectre "springgreen3"
+    private static readonly Color AccentGreen = new(0, 175, 0);            // Spectre "green"
+    private static readonly Color AccentYellow = new(215, 175, 0);         // Spectre "yellow"
+    private static readonly Color AccentGrey = new(135, 135, 135);         // Spectre "grey"
+    private static readonly Color PanelBorderColor = new(70, 88, 116);     // matches the root window border
+
     // Live shell state for the dynamic status bar.
     private ConsoleWindowSystem? _ws;
     private ScrollablePanelControl? _activePanel;
@@ -48,6 +60,15 @@ internal sealed partial class InteractiveConsoleApp
     private StatusBarControl? _statusBar;
     private StatusBarItem? _clockItem;
     private StatusBarItem? _statusMessage;
+    // Top status bar shows session identity (project, scope, agent, version) and updates
+    // live when InteractiveSessionState fires its change events.
+    private StatusBarControl? _topStatusBar;
+    private StatusBarItem? _topProjectItem;
+    private StatusBarItem? _topScopeItem;
+    private StatusBarItem? _topVersionItem;
+    // Unsubscribe handle for session-event subscriptions tied to the current page. Each page
+    // build resets this so subscriptions don't leak across page switches.
+    private Action? _detachSessionEvents;
 
     private static readonly Color[] SectionPalette =
     {
@@ -84,9 +105,11 @@ internal sealed partial class InteractiveConsoleApp
         try
         {
             var windowSystem = new ConsoleWindowSystem(new NetConsoleDriver(RenderMode.Buffer), BuildTheme());
-            windowSystem.PanelStateService.ShowTopPanel = true;
-            windowSystem.PanelStateService.ShowBottomPanel = false; // replaced by the interactive StatusBarControl
-            windowSystem.PanelStateService.TopStatus = $"dotnet skills v{ToolVersionInfo.CurrentVersion} · command center";
+            // Top/bottom system panels are both replaced by interactive StatusBarControl instances —
+            // the top one carries live session identity (project, scope, version), the bottom one
+            // carries shortcuts + toast slot.
+            windowSystem.PanelStateService.ShowTopPanel = false;
+            windowSystem.PanelStateService.ShowBottomPanel = false;
 
             CreateCommandCenter(windowSystem);
             windowSystem.Run();
@@ -145,6 +168,15 @@ internal sealed partial class InteractiveConsoleApp
             .WithVerticalAlignment(VerticalAlignment.Fill)
             .Build();
 
+        _topStatusBar = new StatusBarControl(stickyBottom: false)
+        {
+            StickyPosition = StickyPosition.Top,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            BackgroundColor = Color.Transparent,
+            SeparatorChar = "·",
+            ShortcutLabelSeparator = " ",
+        };
+
         _statusBar = new StatusBarControl(stickyBottom: true)
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -153,6 +185,15 @@ internal sealed partial class InteractiveConsoleApp
             SeparatorChar = "·",
             ShortcutLabelSeparator = " ",
         };
+
+        // Rule separators above and below the content area (cxpost/cxfiles framing pattern).
+        var topRule = Controls.Rule();
+        var bottomRule = Controls.Rule();
+        topRule.StickyPosition = StickyPosition.Top;
+        bottomRule.StickyPosition = StickyPosition.Bottom;
+
+        // Background gradient (cxpost / cxfiles house style — cool dark blue top to near-black bottom).
+        var backgroundGradient = ColorGradient.FromColors(new Color(25, 32, 52), new Color(7, 7, 13));
 
         new WindowBuilder(ws)
             .WithTitle("dotnet skills — command center")
@@ -163,14 +204,67 @@ internal sealed partial class InteractiveConsoleApp
             .HideTitleButtons()
             .WithBorderStyle(BorderStyle.Rounded)
             .WithBorderColor(new Color(70, 88, 116))
+            .WithBackgroundGradient(backgroundGradient, GradientDirection.Vertical)
             .WithAsyncWindowThread(ClockLoopAsync)
             .OnKeyPressed((_, e) => HandleGlobalKey(e))
             .OnClosed((_, _) => ws.Shutdown(0))
+            .AddControl(_topStatusBar)
+            .AddControl(topRule)
             .AddControl(navView)
+            .AddControl(bottomRule)
             .AddControl(_statusBar)
             .BuildAndShow();
 
         RebuildStatusBar(null);
+        RebuildTopStatusBar();
+    }
+
+    /// <summary>
+    /// Repopulates the top status bar with current session identity. Called on initial build
+    /// and from session-change event subscriptions in BuildActionPage/BuildHomePage.
+    /// </summary>
+    private void RebuildTopStatusBar()
+    {
+        var bar = _topStatusBar;
+        if (bar is null) return;
+
+        bar.BatchUpdate(() =>
+        {
+            bar.ClearAll();
+            _topProjectItem = bar.AddLeftText($"[bold rgb(120,180,255)]◆[/] [bold]dotnet skills[/] [grey50]v{Escape(ToolVersionInfo.CurrentVersion)}[/]");
+            bar.AddLeftSeparator();
+            bar.AddLeftText($"[grey50]project[/] {Escape(CompactPath(Session.ProjectDirectory ?? Environment.CurrentDirectory))}");
+            bar.AddLeftSeparator();
+            _topScopeItem = bar.AddLeftText($"[grey50]scope[/] {Escape(Session.Scope.ToString())} [grey50]·[/] [grey50]platform[/] {Escape(Session.Agent.ToString())}");
+
+            _topVersionItem = bar.AddRightText($"[grey50]catalog[/] {Escape(skillCatalog.CatalogVersion)} [grey50]·[/] {skillCatalog.Skills.Count} skills");
+        });
+    }
+
+    /// <summary>
+    /// Replaces any prior session-event subscriptions with a fresh one bound to the active page,
+    /// so flipping Session.Scope/Agent/Project from anywhere refreshes the open page in place.
+    /// Must be called at the top of every page builder.
+    /// </summary>
+    private void AttachSessionEvents()
+    {
+        _detachSessionEvents?.Invoke();
+        Action handler = () =>
+        {
+            RebuildTopStatusBar();
+            RebuildActivePage();
+        };
+        Session.AgentChanged += handler;
+        Session.ScopeChanged += handler;
+        Session.ProjectChanged += handler;
+        Session.SnapshotChanged += handler;
+        _detachSessionEvents = () =>
+        {
+            Session.AgentChanged -= handler;
+            Session.ScopeChanged -= handler;
+            Session.ProjectChanged -= handler;
+            Session.SnapshotChanged -= handler;
+        };
     }
 
     private void HandleGlobalKey(KeyPressedEventArgs e)
@@ -203,6 +297,10 @@ internal sealed partial class InteractiveConsoleApp
                 InstallAllRecommendedFromUi();
                 e.Handled = true;
                 break;
+            case ConsoleKey.Delete when _currentPage == HomeAction.ManageInstalled:
+                RemoveAllFromUi();
+                e.Handled = true;
+                break;
         }
     }
 
@@ -214,13 +312,14 @@ internal sealed partial class InteractiveConsoleApp
     {
         _activePanel = panel;
         _currentPage = action;
+        AttachSessionEvents();
         switch (action)
         {
             case HomeAction.BrowseSkills: BuildSkillBrowserPage(ws, panel); break;
             case HomeAction.ManageInstalled: BuildInstalledPage(ws, panel); break;
             case HomeAction.BrowseCollections: BuildCollectionsPage(ws, panel); break;
             case HomeAction.BrowseBundles: BuildBundlesPage(ws, panel, primaryOnly: true); break;
-            case HomeAction.BrowsePackages: BuildBundlesPage(ws, panel, primaryOnly: false); break;
+            case HomeAction.BrowsePackages: BuildPackagesPage(ws, panel); break;
             case HomeAction.BrowseAgents: BuildAgentsPage(ws, panel); break;
             case HomeAction.SyncProject: BuildProjectPage(ws, panel); break;
             case HomeAction.Analysis: BuildAnalysisPage(ws, panel); break;
@@ -230,7 +329,7 @@ internal sealed partial class InteractiveConsoleApp
             case HomeAction.About: BuildAboutPage(panel); break;
             default:
                 panel.ClearContents();
-                panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel(action.ToString(), new Spectre.Console.Markup("[dim]Not available in this surface.[/]"))));
+                panel.AddControl(BuildNotePanel(action.ToString(), "[grey50]Not available in this surface.[/]", AccentGrey));
                 break;
         }
     }
@@ -243,6 +342,7 @@ internal sealed partial class InteractiveConsoleApp
     {
         _activePanel = panel;
         _currentPage = null;
+        AttachSessionEvents();
         panel.ClearContents();
 
         var layout = ResolveSkillLayout();
@@ -250,44 +350,160 @@ internal sealed partial class InteractiveConsoleApp
         var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
         var outdated = installed.Count(record => !record.IsCurrent);
 
-        var session = BuildRichPropertyGrid(
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildPropertyPanel("session", AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("platform", Escape(Session.Agent.ToString())),
             ("scope", Escape(Session.Scope.ToString())),
             ("project", Escape(CompactPath(Session.ProjectDirectory ?? Environment.CurrentDirectory))),
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"));
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]")));
 
-        var telemetry = BuildRichCardGrid(new SpectreRendering.IRenderable[]
+        // catalog telemetry — five native metric cards laid out by HorizontalGrid (responsive flex).
+        var installedAccent = installed.Count > 0 ? AccentGreen : AccentGrey;
+        var outdatedAccent = outdated == 0 ? AccentGreen : AccentYellow;
+        var telemetryGrid = Controls.HorizontalGrid()
+            .Column(col => col.Flex(1).Add(BuildMetricCard("skills", skillCatalog.Skills.Count.ToString(), "in catalog", AccentDeepSkyBlue)))
+            .Column(col => col.Flex(1).Add(BuildMetricCard("bundles", GetPrimaryBundles().Count.ToString(), "focused", AccentTurquoise)))
+            .Column(col => col.Flex(1).Add(BuildMetricCard("installed", $"{installed.Count}/{skillCatalog.Skills.Count}", "in current target", installedAccent)))
+            .Column(col => col.Flex(1).Add(BuildMetricCard("outdated", outdated.ToString(), outdated == 0 ? "all current" : "need update", outdatedAccent)))
+            .Column(col => col.Flex(1).Add(BuildMetricCard("agents", agentCatalog.Agents.Count.ToString(), "orchestration", AccentMediumPurple)))
+            .Build();
+        panel.AddControl(telemetryGrid);
+
+        if (toolUpdateStatus?.HasUpdate == true)
         {
-            BuildRichMetricCard("skills", skillCatalog.Skills.Count.ToString(), "in catalog", "deepskyblue1"),
-            BuildRichMetricCard("bundles", GetPrimaryBundles().Count.ToString(), "focused", "turquoise2"),
-            BuildRichMetricCard("installed", $"{installed.Count}/{skillCatalog.Skills.Count}", "in current target", installed.Count > 0 ? "green" : "grey"),
-            BuildRichMetricCard("outdated", outdated.ToString(), outdated == 0 ? "all current" : "need update", outdated == 0 ? "green" : "yellow"),
-            BuildRichMetricCard("agents", agentCatalog.Agents.Count.ToString(), "orchestration", "mediumpurple2"),
-        }, maxColumns: 3);
-
-        var quickStart = BuildRichDetailCard("quick start", "deepskyblue1",
-            "[dim]Use the rail on the left to browse and install.[/]",
-            "[grey]Skills[/] [dim]browse and install individual catalog skills[/]",
-            "[grey]Installed[/] [dim]update or remove what is already installed[/]",
-            "[grey]Project[/] [dim]scan the current solution and install recommended skills[/]",
-            "[grey]Agents[/] [dim]install orchestration agents into native agent directories[/]");
-
-        var parts = new List<SpectreRendering.IRenderable>
-        {
-            BuildRichShellPanel("session", session),
-            BuildRichShellPanel("catalog telemetry", telemetry),
-        };
-
-        var update = BuildToolUpdatePanel(toolUpdateStatus);
-        if (update is not null)
-        {
-            parts.Add(update);
+            var freshness = toolUpdateStatus.CheckedAt is null
+                ? "[grey50]latest release detected[/]"
+                : toolUpdateStatus.UsedCachedValue
+                    ? $"[grey50]cached[/] [grey]{Escape(toolUpdateStatus.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))}[/]"
+                    : $"[grey50]checked[/] [grey]{Escape(toolUpdateStatus.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))}[/]";
+            panel.AddControl(BuildBulletPanel("tool update", AccentYellow,
+                "[bold yellow]New dotnet-skills version available[/]",
+                $"[grey50]current[/] [grey]{Escape(toolUpdateStatus.CurrentVersion)}[/] [grey50]-> latest[/] [green]{Escape(toolUpdateStatus.LatestVersion ?? "?")}[/]",
+                $"[green]{Escape(GlobalToolUpdateCommand)}[/]",
+                $"[grey50]local tool manifest[/] [green]{Escape(LocalToolUpdateCommand)}[/]",
+                freshness));
         }
 
-        parts.Add(quickStart);
+        panel.AddControl(BuildBulletPanel("quick start", AccentDeepSkyBlue,
+            "[grey50]Use the rail on the left to browse and install.[/]",
+            "[grey]Skills[/] [grey50]browse and install individual catalog skills[/]",
+            "[grey]Installed[/] [grey50]update or remove what is already installed[/]",
+            "[grey]Project[/] [grey50]scan the current solution and install recommended skills[/]",
+            "[grey]Agents[/] [grey50]install orchestration agents into native agent directories[/]"));
+    }
 
-        panel.AddControl(new SpectreRenderableControl(BuildRichStack(parts.ToArray())));
+    // -------------------------------------------------------------------------
+    // Native control helpers — every page and modal renders through these.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// A native PanelControl with rounded border, themed header, and accent border color —
+    /// the visual equivalent of BuildRichShellPanel but drawn directly into the cell buffer
+    /// so its border aligns with the surrounding window chrome.
+    /// </summary>
+    private static PanelControl BuildSectionPanel(string title, string body, Color accent) => Controls.Panel()
+        .WithHeader($"[bold]{Escape(title)}[/]")
+        .WithBorderStyle(BorderStyle.Rounded)
+        .WithBorderColor(accent)
+        .WithPadding(1, 0, 1, 0)
+        .WithContent(body)
+        .WithAlignment(HorizontalAlignment.Stretch)
+        .Build();
+
+    /// <summary>
+    /// A native metric card: three stacked lines (title accent, value bold, detail grey) inside
+    /// a rounded PanelControl with an accent border. Used in HorizontalGrid columns.
+    /// </summary>
+    private static PanelControl BuildMetricCard(string title, string value, string detail, Color accent)
+    {
+        // Multi-line markup body — PanelControl splits on \n and wraps each line.
+        var body = string.Join("\n",
+            $"[bold]{Escape(value)}[/]",
+            $"[grey50]{Escape(detail)}[/]");
+        return Controls.Panel()
+            .WithHeader($"[bold]{Escape(title)}[/]")
+            .WithBorderStyle(BorderStyle.Rounded)
+            .WithBorderColor(accent)
+            .WithPadding(1, 0, 1, 0)
+            .WithContent(body)
+            .WithAlignment(HorizontalAlignment.Stretch)
+            .Build();
+    }
+
+    /// <summary>
+    /// Formats one row of a property grid as " label  value" — fixed-width left column so values
+    /// line up when stacked. Equivalent to BuildRichPropertyGrid's two-column grid but rendered
+    /// inline as markup text (cheaper, and PanelControl wraps the value if it overflows).
+    /// </summary>
+    private static string FormatRow(string label, string value)
+    {
+        const int labelWidth = 12;
+        var padded = label.Length >= labelWidth ? label : label + new string(' ', labelWidth - label.Length);
+        return $"[grey50]{Escape(padded)}[/] {value}";
+    }
+
+    /// <summary>
+    /// A native section panel whose body is a property grid built from label/value rows.
+    /// The native equivalent of BuildRichShellPanel(BuildRichPropertyGrid(...)).
+    /// </summary>
+    private static PanelControl BuildPropertyPanel(string title, Color accent, params (string Label, string Value)[] rows)
+    {
+        var body = string.Join("\n", rows.Select(r => FormatRow(r.Label, r.Value)));
+        return BuildSectionPanel(title, body, accent);
+    }
+
+    /// <summary>
+    /// A native section panel containing a single markup line — used for empty-state notes and
+    /// short status messages.
+    /// </summary>
+    private static PanelControl BuildNotePanel(string title, string markup, Color accent)
+        => BuildSectionPanel(title, markup, accent);
+
+    /// <summary>
+    /// A native section panel whose body is a vertical stack of markup lines — used for
+    /// "quick start", "surface map", and similar bullet-list cards. Lines are joined with \n
+    /// so PanelControl wraps each independently.
+    /// </summary>
+    private static PanelControl BuildBulletPanel(string title, Color accent, params string[] lines)
+    {
+        var body = string.Join("\n", lines.Where(l => !string.IsNullOrWhiteSpace(l)));
+        return BuildSectionPanel(title, body, accent);
+    }
+
+    /// <summary>
+    /// Lays out a sequence of cards in a responsive HorizontalGrid with 1, 2, or 3 columns based
+    /// on the current console width — the native equivalent of BuildRichCardGrid(maxColumns).
+    /// Empty columns at the end of the last row are padded with blank MarkupControls so the cards
+    /// keep equal width.
+    /// </summary>
+    private static IWindowControl BuildCardGrid(IReadOnlyList<PanelControl> cards, int maxColumns = 3)
+    {
+        if (cards.Count == 0)
+        {
+            return new MarkupControl(new List<string> { "[grey50]No items available.[/]" });
+        }
+
+        var consoleWidth = SafeConsole(() => Console.WindowWidth, 120);
+        var columnCount = consoleWidth >= 190 ? Math.Min(maxColumns, 3)
+                        : consoleWidth >= 130 ? Math.Min(maxColumns, 2)
+                                              : 1;
+        columnCount = Math.Max(1, Math.Min(columnCount, cards.Count));
+
+        var grid = Controls.HorizontalGrid();
+        for (var i = 0; i < columnCount; i++)
+        {
+            var columnIndex = i;
+            grid = grid.Column(col =>
+            {
+                col.Flex(1);
+                for (var cardIndex = columnIndex; cardIndex < cards.Count; cardIndex += columnCount)
+                {
+                    col.Add(cards[cardIndex]);
+                }
+            });
+        }
+
+        return grid.Build();
     }
 
     // -------------------------------------------------------------------------
@@ -308,16 +524,15 @@ internal sealed partial class InteractiveConsoleApp
             .ThenBy(skill => skill.Name, StringComparer.Ordinal)
             .ToArray();
 
-        var summary = BuildRichPropertyGrid(
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildPropertyPanel("skill browser", AccentTurquoise,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
             ("available", available.Length.ToString()),
-            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}"));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("skill browser", summary, "turquoise2")));
+            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
 
         if (available.Length == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("available", new Spectre.Console.Markup("[dim]Every catalog skill is already installed in this target.[/]"))));
+            panel.AddControl(BuildNotePanel("available", "[grey50]Every catalog skill is already installed in this target.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -326,7 +541,10 @@ internal sealed partial class InteractiveConsoleApp
             .WithScrollbarVisibility(ScrollbarVisibility.Auto);
         foreach (var skill in available)
         {
-            list.AddItem(BuildSkillChoiceLabel(skill, installed), skill);
+            // ListControl parses item text as markup; BuildSkillChoiceLabel produces plain
+            // text containing bracketed stack/lane like "[.NET Foundations / ...]". Escape so
+            // brackets are not interpreted as Spectre markup tags.
+            list.AddItem(Escape(BuildSkillChoiceLabel(skill, installed)), skill);
         }
         list.OnItemActivated((_, item) =>
         {
@@ -340,17 +558,19 @@ internal sealed partial class InteractiveConsoleApp
 
     private void ShowSkillDetailModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillEntry skill)
     {
-        var detail = BuildRichStack(
-            BuildRichShellPanel(ToAlias(skill.Name), BuildRichPropertyGrid(
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(ToAlias(skill.Name), AccentTurquoise,
                 ("skill", Escape(skill.Name)),
                 ("collection", Escape(skill.Stack)),
                 ("lane", Escape(skill.Lane)),
                 ("version", Escape(skill.Version)),
-                ("tokens", FormatTokenCount(skill.TokenCount))), "turquoise2"),
-            BuildRichShellPanel("summary", new Spectre.Console.Markup(Escape(skill.Description))),
-            BuildRichShellPanel("preview", new Spectre.Console.Markup(Escape(LoadSkillPreview(skill)))));
+                ("tokens", FormatTokenCount(skill.TokenCount))),
+            BuildNotePanel("summary", Escape(skill.Description), AccentDeepSkyBlue),
+            BuildNotePanel("preview", Escape(LoadSkillPreview(skill)), AccentGrey),
+        };
 
-        ShowModal(ws, $"Skill · {ToAlias(skill.Name)}", detail,
+        ShowModalNative(ws, $"Skill · {ToAlias(skill.Name)}", detail,
             ("Install into current target", () =>
             {
                 var summary = SafeGet(() => new SkillInstaller(skillCatalog).Install(new[] { skill }, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
@@ -382,16 +602,15 @@ internal sealed partial class InteractiveConsoleApp
             .ToArray();
         var outdated = installed.Where(record => !record.IsCurrent).ToArray();
 
-        var summary = BuildRichPropertyGrid(
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildPropertyPanel("installed skills", AccentGreen,
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
             ("installed", installed.Length.ToString()),
             ("outdated", outdated.Length == 0 ? "[green]0[/]" : $"[yellow]{outdated.Length}[/]"),
-            ("tokens", FormatTokenCount(installed.Sum(record => record.Skill.TokenCount))));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("installed skills", summary, "green")));
+            ("tokens", FormatTokenCount(installed.Sum(record => record.Skill.TokenCount)))));
 
         if (installed.Length == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("installed", new Spectre.Console.Markup("[dim]No catalog skills are installed in this target yet. Visit the Skills page to add some.[/]"))));
+            panel.AddControl(BuildNotePanel("installed", "[grey50]No catalog skills are installed in this target yet. Visit the Skills page to add some.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -400,7 +619,8 @@ internal sealed partial class InteractiveConsoleApp
             .WithScrollbarVisibility(ScrollbarVisibility.Auto);
         foreach (var record in installed)
         {
-            list.AddItem((record.IsCurrent ? "✓ " : "↻ ") + BuildInstalledSkillChoiceLabel(record), record);
+            // Escape: the label contains "[stack / lane]" which would otherwise be parsed as markup.
+            list.AddItem((record.IsCurrent ? "✓ " : "↻ ") + Escape(BuildInstalledSkillChoiceLabel(record)), record);
         }
         list.OnItemActivated((_, item) =>
         {
@@ -435,15 +655,17 @@ internal sealed partial class InteractiveConsoleApp
 
     private void ShowInstalledSkillModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, InstalledSkillRecord record)
     {
-        var detail = BuildRichStack(
-            BuildRichShellPanel(ToAlias(record.Skill.Name), BuildRichPropertyGrid(
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(ToAlias(record.Skill.Name), AccentGreen,
                 ("skill", Escape(record.Skill.Name)),
                 ("collection", Escape($"{record.Skill.Stack} / {record.Skill.Lane}")),
                 ("installed", Escape(record.InstalledVersion)),
                 ("latest", Escape(record.Skill.Version)),
                 ("status", record.IsCurrent ? "[green]✓ current[/]" : "[yellow]↻ update available[/]"),
-                ("tokens", FormatTokenCount(record.Skill.TokenCount))), "green"),
-            BuildRichShellPanel("summary", new Spectre.Console.Markup(Escape(record.Skill.Description))));
+                ("tokens", FormatTokenCount(record.Skill.TokenCount))),
+            BuildNotePanel("summary", Escape(record.Skill.Description), AccentDeepSkyBlue),
+        };
 
         var buttons = new List<(string, Action)>();
         if (!record.IsCurrent)
@@ -467,7 +689,7 @@ internal sealed partial class InteractiveConsoleApp
             BuildInstalledPage(ws, owner);
         })));
 
-        ShowModal(ws, $"Installed · {ToAlias(record.Skill.Name)}", detail, buttons.ToArray());
+        ShowModalNative(ws, $"Installed · {ToAlias(record.Skill.Name)}", detail, buttons.ToArray());
     }
 
     private string UpdateSkillRecords(IReadOnlyList<InstalledSkillRecord> records)
@@ -494,31 +716,30 @@ internal sealed partial class InteractiveConsoleApp
             .ThenBy(view => view.Collection, StringComparer.Ordinal)
             .ToArray();
 
-        var summary = BuildRichPropertyGrid(
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildPropertyPanel("collection browser", AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("collections", views.Length.ToString()),
             ("skills", skillCatalog.Skills.Count.ToString()),
-            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}"));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("collection browser", summary)));
+            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
 
         if (views.Length == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("collections", new Spectre.Console.Markup("[dim]No collections in this catalog version.[/]"))));
+            panel.AddControl(BuildNotePanel("collections", "[grey50]No collections in this catalog version.[/]", AccentDeepSkyBlue));
             return;
         }
 
-        var cards = views.Select(view => (SpectreRendering.IRenderable)BuildRichDetailCard(
-            view.Collection, "deepskyblue1",
-            $"[dim]lanes[/] {view.Lanes.Count}  [dim]skills[/] {view.InstalledCount}/{view.SkillCount}  [dim]tokens[/] {FormatTokenCount(view.TokenCount)}",
-            $"[grey]{Escape(string.Join(", ", view.Lanes.Take(6).Select(lane => lane.Lane)))}[/]")).ToArray();
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("overview", BuildRichCardGrid(cards, maxColumns: 2))));
+        var collectionCards = views.Select(view => BuildBulletPanel(
+            view.Collection, AccentDeepSkyBlue,
+            $"[grey50]lanes[/] {view.Lanes.Count}  [grey50]skills[/] {view.InstalledCount}/{view.SkillCount}  [grey50]tokens[/] {FormatTokenCount(view.TokenCount)}",
+            $"[grey]{Escape(string.Join(", ", view.Lanes.Take(6).Select(lane => lane.Lane)))}[/]")).ToList();
+        panel.AddControl(BuildCardGrid(collectionCards, maxColumns: 2));
 
         var list = StyledList("Collections (Enter to install the whole collection)")
             .MaxVisibleItems(14)
             .WithScrollbarVisibility(ScrollbarVisibility.Auto);
         foreach (var view in views)
         {
-            list.AddItem(BuildCollectionChoiceLabel(view), view);
+            list.AddItem(Escape(BuildCollectionChoiceLabel(view)), view);
         }
         list.OnItemActivated((_, item) =>
         {
@@ -553,15 +774,14 @@ internal sealed partial class InteractiveConsoleApp
         var title = primaryOnly ? "focused bundles" : "catalog packages";
         var skillTokens = skillCatalog.Skills.ToDictionary(skill => skill.Name, skill => skill.TokenCount, StringComparer.OrdinalIgnoreCase);
 
-        var summary = BuildRichPropertyGrid(
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildPropertyPanel(title, AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             (primaryOnly ? "bundles" : "packages", packages.Length.ToString()),
-            ("skills covered", skillCatalog.Skills.Count.ToString()));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel(title, summary)));
+            ("skills covered", skillCatalog.Skills.Count.ToString())));
 
         if (packages.Length == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel(title, new Spectre.Console.Markup("[dim]Nothing available in this catalog version.[/]"))));
+            panel.AddControl(BuildNotePanel(title, "[grey50]Nothing available in this catalog version.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -571,7 +791,7 @@ internal sealed partial class InteractiveConsoleApp
         foreach (var package in packages)
         {
             var tokenCount = package.Skills.Sum(name => skillTokens.TryGetValue(name, out var value) ? value : 0);
-            list.AddItem($"{package.Name}  [dim]({package.Skills.Count} skills, {FormatTokenCount(tokenCount)} tokens)[/]", package);
+            list.AddItem($"{Escape(package.Name)}  [dim]({package.Skills.Count} skills, {FormatTokenCount(tokenCount)} tokens)[/]", package);
         }
         list.OnItemActivated((_, item) =>
         {
@@ -585,15 +805,17 @@ internal sealed partial class InteractiveConsoleApp
 
     private void ShowBundleModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillPackageEntry package, bool primaryOnly)
     {
-        var detail = BuildRichStack(
-            BuildRichShellPanel(package.Name, BuildRichPropertyGrid(
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(package.Name, AccentTurquoise,
                 ("package", Escape(package.Name)),
                 ("title", Escape(package.Title)),
                 ("skills", package.Skills.Count.ToString()),
-                ("includes", Escape(string.Join(", ", package.Skills.Take(10).Select(ToAlias))))), "turquoise2"),
-            BuildRichShellPanel("summary", new Spectre.Console.Markup(Escape(package.Description))));
+                ("includes", Escape(string.Join(", ", package.Skills.Take(10).Select(ToAlias))))),
+            BuildNotePanel("summary", Escape(package.Description), AccentDeepSkyBlue),
+        };
 
-        ShowModal(ws, $"Bundle · {package.Name}", detail,
+        ShowModalNative(ws, $"Bundle · {package.Name}", detail,
             ("Install bundle into current target", () =>
             {
                 var skills = SafeGet(() => new SkillInstaller(skillCatalog).SelectSkillsFromPackages(new[] { package.Name }), Array.Empty<SkillEntry>());
@@ -601,6 +823,44 @@ internal sealed partial class InteractiveConsoleApp
                 Toast(summary is null ? $"Could not install bundle {package.Name}" : $"{package.Name}: {summary.InstalledCount} written, {summary.SkippedExisting.Count} skipped");
                 BuildBundlesPage(ws, owner, primaryOnly);
             }));
+    }
+
+    // -------------------------------------------------------------------------
+    // Packages — NuGet ids / prefixes → catalog skills
+    // -------------------------------------------------------------------------
+
+    private void BuildPackagesPage(ConsoleWindowSystem ws, ScrollablePanelControl panel)
+    {
+        panel.ClearContents();
+
+        var signals = SafeGet(BuildPackageSignals, Array.Empty<PackageSignalView>());
+        panel.AddControl(BuildPropertyPanel("package signals", AccentTurquoise,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("signals", signals.Count.ToString()),
+            ("skills covered", signals.Select(s => s.Skill.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ToString())));
+
+        if (signals.Count == 0)
+        {
+            panel.AddControl(BuildNotePanel("packages", "[grey50]No NuGet package or prefix signals are present in this catalog version.[/]", AccentDeepSkyBlue));
+            return;
+        }
+
+        var list = StyledList("Package signals (Enter to inspect linked skill)")
+            .MaxVisibleItems(16)
+            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        foreach (var signal in signals)
+        {
+            // ListControl renders item text as markup — escape the whole plain-text label.
+            list.AddItem(Escape($"{signal.Signal} [{signal.Kind}] -> {ToAlias(signal.Skill.Name)} [{signal.Skill.Stack} / {signal.Skill.Lane}] ({FormatTokenCount(signal.Skill.TokenCount)} tokens)"), signal);
+        }
+        list.OnItemActivated((_, item) =>
+        {
+            if (item.Tag is PackageSignalView signal)
+            {
+                ShowSkillDetailModal(ws, panel, signal.Skill);
+            }
+        });
+        panel.AddControl(list.Build());
     }
 
     // -------------------------------------------------------------------------
@@ -617,16 +877,15 @@ internal sealed partial class InteractiveConsoleApp
             ? Array.Empty<InstalledAgentRecord>()
             : SafeGet(() => installer.GetInstalledAgents(layout), Array.Empty<InstalledAgentRecord>());
 
-        var summary = BuildRichPropertyGrid(
+        panel.AddControl(BuildPropertyPanel("orchestration agents", AccentMediumPurple,
             ("agents", agentCatalog.Agents.Count.ToString()),
             ("platform", Escape(Session.Agent.ToString())),
-            ("target", layout is null ? $"[red]{Escape(layoutError ?? "unresolved")}[/]" : $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("installed", layout is null ? "[grey]-[/]" : $"{installed.Count}/{agentCatalog.Agents.Count}"));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("orchestration agents", summary, "mediumpurple2")));
+            ("target", layout is null ? $"[red]{Escape(layoutError ?? "unresolved")}[/]" : $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("installed", layout is null ? "[grey]-[/]" : $"{installed.Count}/{agentCatalog.Agents.Count}")));
 
         if (agentCatalog.Agents.Count == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("agents", new Spectre.Console.Markup("[dim]No agents available in the catalog.[/]"))));
+            panel.AddControl(BuildNotePanel("agents", "[grey50]No agents available in the catalog.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -636,7 +895,7 @@ internal sealed partial class InteractiveConsoleApp
         foreach (var agent in agentCatalog.Agents.OrderBy(a => a.Name, StringComparer.Ordinal))
         {
             var isInstalled = installed.Any(i => string.Equals(i.Agent.Name, agent.Name, StringComparison.OrdinalIgnoreCase));
-            list.AddItem($"{(isInstalled ? "✓ " : "○ ")}{ToAlias(agent.Name)}  [dim]{Escape(CompactDescription(agent.Description))}[/]", agent);
+            list.AddItem($"{(isInstalled ? "✓ " : "○ ")}{Escape(ToAlias(agent.Name))}  [dim]{Escape(CompactDescription(agent.Description))}[/]", agent);
         }
         list.OnItemActivated((_, item) =>
         {
@@ -649,7 +908,7 @@ internal sealed partial class InteractiveConsoleApp
 
         if (layout is null)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("note", new Spectre.Console.Markup("[yellow]No native agent directory resolved. Set the platform on the Settings page, or create one of .codex/.claude/.github/.gemini/.junie.[/]"))));
+            panel.AddControl(BuildNotePanel("note", "[yellow]No native agent directory resolved. Set the platform on the Settings page, or create one of .codex/.claude/.github/.gemini/.junie.[/]", AccentYellow));
             return;
         }
 
@@ -670,12 +929,14 @@ internal sealed partial class InteractiveConsoleApp
 
     private void ShowAgentModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, AgentEntry agent)
     {
-        var detail = BuildRichStack(
-            BuildRichShellPanel(ToAlias(agent.Name), BuildRichPropertyGrid(
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(ToAlias(agent.Name), AccentMediumPurple,
                 ("agent", Escape(agent.Name)),
-                ("skills", agent.Skills.Count == 0 ? "[dim]-[/]" : Escape(string.Join(", ", agent.Skills.Select(ToAlias)))),
-                ("platform", Escape(Session.Agent.ToString()))), "mediumpurple2"),
-            BuildRichShellPanel("summary", new Spectre.Console.Markup(Escape(agent.Description))));
+                ("skills", agent.Skills.Count == 0 ? "[grey50]-[/]" : Escape(string.Join(", ", agent.Skills.Select(ToAlias)))),
+                ("platform", Escape(Session.Agent.ToString()))),
+            BuildNotePanel("summary", Escape(agent.Description), AccentDeepSkyBlue),
+        };
 
         var buttons = new List<(string, Action)>();
         var layout = TryResolveAgentLayout(out _);
@@ -695,7 +956,7 @@ internal sealed partial class InteractiveConsoleApp
             }));
         }
 
-        ShowModal(ws, $"Agent · {ToAlias(agent.Name)}", detail, buttons.ToArray());
+        ShowModalNative(ws, $"Agent · {ToAlias(agent.Name)}", detail, buttons.ToArray());
     }
 
     // -------------------------------------------------------------------------
@@ -710,7 +971,7 @@ internal sealed partial class InteractiveConsoleApp
         var scan = SafeGet(() => new ProjectSkillRecommender(skillCatalog).Analyze(Session.ProjectDirectory), null);
         if (scan is null)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("project scan", new Spectre.Console.Markup("[red]Could not scan the project directory.[/]"))));
+            panel.AddControl(BuildNotePanel("project scan", "[red]Could not scan the project directory.[/]", new Color(200, 60, 60)));
             return;
         }
 
@@ -722,17 +983,16 @@ internal sealed partial class InteractiveConsoleApp
         var med = scan.Recommendations.Count(r => r.Confidence == RecommendationConfidence.Medium);
         var low = scan.Recommendations.Count(r => r.Confidence == RecommendationConfidence.Low);
 
-        var summary = BuildRichPropertyGrid(
-            ("project", $"[dim]{Escape(CompactPath(scan.ProjectRoot.FullName))}[/]"),
+        panel.AddControl(BuildPropertyPanel("project scan", AccentDeepSkyBlue,
+            ("project", $"[grey50]{Escape(CompactPath(scan.ProjectRoot.FullName))}[/]"),
             ("scanned", $"{scan.ProjectFiles.Count} project file(s)"),
-            ("frameworks", scan.TargetFrameworks.Count == 0 ? "[dim]unknown[/]" : Escape(string.Join(", ", scan.TargetFrameworks))),
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("recommendations", $"{scan.Recommendations.Count}  [dim]([/][green]{high} high[/][dim] · [/][yellow]{med} med[/][dim] · [/][grey]{low} low[/][dim])[/]"));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("project scan", summary)));
+            ("frameworks", scan.TargetFrameworks.Count == 0 ? "[grey50]unknown[/]" : Escape(string.Join(", ", scan.TargetFrameworks))),
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("recommendations", $"{scan.Recommendations.Count}  [grey50]([/][green]{high} high[/][grey50] · [/][yellow]{med} med[/][grey50] · [/][grey]{low} low[/][grey50])[/]")));
 
         if (scan.Recommendations.Count == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("recommendations", new Spectre.Console.Markup("[dim]No package or framework signals matched the catalog. Start with the[/] [green]dotnet[/] [dim]and[/] [green]modern-csharp[/] [dim]skills from the Skills page.[/]"))));
+            panel.AddControl(BuildNotePanel("recommendations", "[grey50]No package or framework signals matched the catalog. Start with the[/] [green]dotnet[/] [grey50]and[/] [green]modern-csharp[/] [grey50]skills from the Skills page.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -751,31 +1011,48 @@ internal sealed partial class InteractiveConsoleApp
             };
             installedByName.TryGetValue(recommendation.Skill.Name, out var record);
             var status = record is null ? "[deepskyblue1]new[/]" : record.IsCurrent ? "[green]installed[/]" : "[yellow]update[/]";
-            list.AddItem($"{marker} {ToAlias(recommendation.Skill.Name)}  [dim]{status}[/]  [grey]{Escape(string.Join("; ", recommendation.Reasons.Take(2)))}[/]", recommendation);
+            list.AddItem($"{marker} {Escape(ToAlias(recommendation.Skill.Name))}  [dim]{status}[/]  [grey]{Escape(string.Join("; ", recommendation.Reasons.Take(2)))}[/]", recommendation);
         }
         list.OnItemActivated((_, item) =>
         {
             if (item.Tag is ProjectSkillRecommendation recommendation)
             {
-                var summary2 = SafeGet(() => new SkillInstaller(skillCatalog).Install(new[] { recommendation.Skill }, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
+                // Outdated recommendations need force=true: SkillInstaller.Install skips
+                // existing skill directories unless forced, so an "update" entry would
+                // otherwise be reported as skipped and stay outdated.
+                var isOutdated = installedByName.TryGetValue(recommendation.Skill.Name, out var existing) && !existing.IsCurrent;
+                var summary2 = SafeGet(() => new SkillInstaller(skillCatalog).Install(new[] { recommendation.Skill }, ResolveSkillLayout(), force: isOutdated), default(SkillInstallSummary));
                 Toast(summary2 is null ? $"Install failed for {ToAlias(recommendation.Skill.Name)}" : $"{ToAlias(recommendation.Skill.Name)}: {summary2.InstalledCount} written, {summary2.SkippedExisting.Count} skipped");
                 BuildProjectPage(ws, panel);
             }
         });
         panel.AddControl(list.Build());
 
-        var installable = scan.Recommendations
-            .Where(r => !installedByName.TryGetValue(r.Skill.Name, out var rec) || !rec.IsCurrent)
+        // Split recommendations: new ones install with force=false, outdated ones need
+        // force=true so the existing skill directory is overwritten with the latest version.
+        var newSkills = scan.Recommendations
+            .Where(r => !installedByName.ContainsKey(r.Skill.Name))
             .Select(r => r.Skill)
             .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
             .ToArray();
+        var outdatedSkills = scan.Recommendations
+            .Where(r => installedByName.TryGetValue(r.Skill.Name, out var rec) && !rec.IsCurrent)
+            .Select(r => r.Skill)
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+            .ToArray();
+        var installable = newSkills.Concat(outdatedSkills).ToArray();
         if (installable.Length > 0)
         {
             panel.AddControl(Controls.Button($"Install all {installable.Length} recommended skill(s)")
                 .OnClick((_, _) =>
                 {
-                    var summary2 = SafeGet(() => new SkillInstaller(skillCatalog).Install(installable, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
-                    Toast(summary2 is null ? "Install failed" : $"Installed {summary2.InstalledCount}, skipped {summary2.SkippedExisting.Count}");
+                    var skillLayout = ResolveSkillLayout();
+                    var installer2 = new SkillInstaller(skillCatalog);
+                    var newSummary = newSkills.Length == 0 ? default : SafeGet(() => installer2.Install(newSkills, skillLayout, force: false), default(SkillInstallSummary));
+                    var updateSummary = outdatedSkills.Length == 0 ? default : SafeGet(() => installer2.Install(outdatedSkills, skillLayout, force: true), default(SkillInstallSummary));
+                    var installedCount = (newSummary?.InstalledCount ?? 0) + (updateSummary?.InstalledCount ?? 0);
+                    var skippedCount = (newSummary?.SkippedExisting.Count ?? 0) + (updateSummary?.SkippedExisting.Count ?? 0);
+                    Toast(installedCount == 0 && skippedCount == 0 ? "Install failed" : $"Installed {installedCount}, skipped {skippedCount}");
                     BuildProjectPage(ws, panel);
                 }).Build());
         }
@@ -798,25 +1075,24 @@ internal sealed partial class InteractiveConsoleApp
         var signals = SafeGet(BuildPackageSignals, Array.Empty<PackageSignalView>());
         var heaviest = skillCatalog.Skills.OrderByDescending(skill => skill.TokenCount).Take(12).ToArray();
 
-        var summary = BuildRichPropertyGrid(
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildPropertyPanel("catalog analysis", AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("collections", views.Length.ToString()),
             ("skills", skillCatalog.Skills.Count.ToString()),
             ("total tokens", FormatTokenCount(skillCatalog.Skills.Sum(skill => skill.TokenCount))),
-            ("package signals", signals.Count.ToString()));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("catalog analysis", summary)));
+            ("package signals", signals.Count.ToString())));
 
-        var collectionCards = views.Take(12).Select(view => (SpectreRendering.IRenderable)BuildRichDetailCard(
-            view.Collection, "deepskyblue1",
-            $"[dim]skills[/] {view.SkillCount}  [dim]installed[/] {view.InstalledCount}  [dim]tokens[/] {FormatTokenCount(view.TokenCount)}")).ToArray();
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("collections by size", BuildRichCardGrid(collectionCards, maxColumns: 3))));
+        var collectionCards = views.Take(12).Select(view => BuildBulletPanel(
+            view.Collection, AccentDeepSkyBlue,
+            $"[grey50]skills[/] {view.SkillCount}  [grey50]installed[/] {view.InstalledCount}  [grey50]tokens[/] {FormatTokenCount(view.TokenCount)}")).ToList();
+        panel.AddControl(BuildCardGrid(collectionCards, maxColumns: 3));
 
         var heavyList = StyledList("Heaviest skills (Enter for details)")
             .MaxVisibleItems(12)
             .WithScrollbarVisibility(ScrollbarVisibility.Auto);
         foreach (var skill in heaviest)
         {
-            heavyList.AddItem($"{FormatTokenCount(skill.TokenCount)} tokens  ·  {ToAlias(skill.Name)}  [dim]{Escape(skill.Stack)}[/]", skill);
+            heavyList.AddItem($"{FormatTokenCount(skill.TokenCount)} tokens  ·  {Escape(ToAlias(skill.Name))}  [dim]{Escape(skill.Stack)}[/]", skill);
         }
         heavyList.OnItemActivated((_, item) =>
         {
@@ -829,9 +1105,9 @@ internal sealed partial class InteractiveConsoleApp
 
         if (signals.Count > 0)
         {
-            var signalCards = signals.Take(18).Select(signal => (SpectreRendering.IRenderable)new Spectre.Console.Markup(
-                $"[grey]{Escape(signal.Signal)}[/] [dim]({Escape(signal.Kind)})[/] [dim]→[/] {Escape(ToAlias(signal.Skill.Name))}")).ToArray();
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("package signals", BuildRichStack(signalCards))));
+            var signalLines = signals.Take(18).Select(signal =>
+                $"[grey]{Escape(signal.Signal)}[/] [grey50]({Escape(signal.Kind)})[/] [grey50]→[/] {Escape(ToAlias(signal.Skill.Name))}").ToArray();
+            panel.AddControl(BuildBulletPanel("package signals", AccentTurquoise, signalLines));
         }
     }
 
@@ -846,13 +1122,13 @@ internal sealed partial class InteractiveConsoleApp
         var installer = new SkillInstaller(skillCatalog);
         var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
 
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("remove all installed skills", BuildRichPropertyGrid(
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("installed", installed.Count.ToString())))));
+        panel.AddControl(BuildPropertyPanel("remove all installed skills", new Color(200, 60, 60),
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("installed", installed.Count.ToString())));
 
         if (installed.Count == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("status", new Spectre.Console.Markup("[dim]Nothing to remove in this target.[/]"))));
+            panel.AddControl(BuildNotePanel("status", "[grey50]Nothing to remove in this target.[/]", AccentDeepSkyBlue));
             return;
         }
 
@@ -874,19 +1150,19 @@ internal sealed partial class InteractiveConsoleApp
             .Where(record => !record.IsCurrent)
             .ToArray();
 
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("update all outdated skills", BuildRichPropertyGrid(
-            ("target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("outdated", outdated.Length.ToString())))));
+        panel.AddControl(BuildPropertyPanel("update all outdated skills", AccentYellow,
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("outdated", outdated.Length.ToString())));
 
         if (outdated.Length == 0)
         {
-            panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("status", new Spectre.Console.Markup("[green]All installed skills already match the catalog version.[/]"))));
+            panel.AddControl(BuildNotePanel("status", "[green]All installed skills already match the catalog version.[/]", AccentGreen));
             return;
         }
 
-        var listCards = outdated.Select(record => (SpectreRendering.IRenderable)new Spectre.Console.Markup(
-            $"[yellow]↻[/] {Escape(ToAlias(record.Skill.Name))}  [dim]{Escape(record.InstalledVersion)} → {Escape(record.Skill.Version)}[/]")).ToArray();
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("pending updates", BuildRichStack(listCards))));
+        var pendingLines = outdated.Select(record =>
+            $"[yellow]↻[/] {Escape(ToAlias(record.Skill.Name))}  [grey50]{Escape(record.InstalledVersion)} → {Escape(record.Skill.Version)}[/]").ToArray();
+        panel.AddControl(BuildBulletPanel("pending updates", AccentYellow, pendingLines));
 
         panel.AddControl(Controls.Button($"Update all {outdated.Length} skill(s)")
             .OnClick((_, _) =>
@@ -906,15 +1182,14 @@ internal sealed partial class InteractiveConsoleApp
 
         var layout = ResolveSkillLayout();
         var agentStatus = ResolveAgentStatus();
-        var summary = BuildRichPropertyGrid(
+        panel.AddControl(BuildPropertyPanel("workspace", AccentDeepSkyBlue,
             ("platform", Escape(Session.Agent.ToString())),
             ("scope", Escape(Session.Scope.ToString())),
             ("project", Escape(CompactPath(Session.ProjectDirectory ?? Environment.CurrentDirectory))),
-            ("skill target", $"[dim]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("agent target", agentStatus.Layout is null ? $"[red]{Escape(agentStatus.Summary)}[/]" : $"[dim]{Escape(CompactPath(agentStatus.Layout.PrimaryRoot.FullName))}[/]"),
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
-            ("build", ToolVersionInfo.IsDevelopmentBuild ? "[dim]local development[/]" : "[green]published[/]"));
-        panel.AddControl(new SpectreRenderableControl(BuildRichShellPanel("workspace", summary)));
+            ("skill target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("agent target", agentStatus.Layout is null ? $"[red]{Escape(agentStatus.Summary)}[/]" : $"[grey50]{Escape(CompactPath(agentStatus.Layout.PrimaryRoot.FullName))}[/]"),
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("build", ToolVersionInfo.IsDevelopmentBuild ? "[grey50]local development[/]" : "[green]published[/]")));
 
         var list = StyledList("Settings (Enter to change)")
             .MaxVisibleItems(8);
@@ -966,45 +1241,43 @@ internal sealed partial class InteractiveConsoleApp
     private void BuildAboutPage(ScrollablePanelControl panel)
     {
         panel.ClearContents();
-        var about = BuildRichPropertyGrid(
+        panel.AddControl(BuildPropertyPanel("about", AccentDeepSkyBlue,
             ("tool", $"{Escape(ToolIdentity.DisplayCommand)}"),
             ("package", Escape(ToolIdentity.PackageId)),
             ("version", Escape(ToolVersionInfo.CurrentVersion)),
-            ("build", ToolVersionInfo.IsDevelopmentBuild ? "[dim]local development[/]" : "[green]published[/]"),
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [dim]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("build", ToolVersionInfo.IsDevelopmentBuild ? "[grey50]local development[/]" : "[green]published[/]"),
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("skills", skillCatalog.Skills.Count.ToString()),
-            ("agents", agentCatalog.Agents.Count.ToString()));
+            ("agents", agentCatalog.Agents.Count.ToString())));
 
-        var surface = BuildRichDetailCard("surface map", "deepskyblue1",
-            "[grey]Home[/] [dim]session, catalog telemetry, update notice[/]",
-            "[grey]Skills / Installed[/] [dim]browse, install, update, remove catalog skills[/]",
-            "[grey]Collections / Bundles / Packages[/] [dim]install grouped surfaces[/]",
-            "[grey]Agents[/] [dim]install orchestration agents into native agent directories[/]",
-            "[grey]Project[/] [dim]scan .csproj signals and install recommended skills[/]",
-            "[grey]Analysis[/] [dim]collection sizes, heaviest skills, package signals[/]");
+        panel.AddControl(BuildBulletPanel("surface map", AccentDeepSkyBlue,
+            "[grey]Home[/] [grey50]session, catalog telemetry, update notice[/]",
+            "[grey]Skills / Installed[/] [grey50]browse, install, update, remove catalog skills[/]",
+            "[grey]Collections / Bundles / Packages[/] [grey50]install grouped surfaces[/]",
+            "[grey]Agents[/] [grey50]install orchestration agents into native agent directories[/]",
+            "[grey]Project[/] [grey50]scan .csproj signals and install recommended skills[/]",
+            "[grey]Analysis[/] [grey50]collection sizes, heaviest skills, package signals[/]"));
 
-        var notes = BuildRichDetailCard("notes", "grey",
-            "[dim]This is the SharpConsoleUI command center. Run with redirected stdin/stdout to get the classic prompt shell instead.[/]",
-            "[dim]CLI sub-commands (list, install, recommend, …) are unchanged — see[/] [green]dotnet skills help[/][dim].[/]");
-
-        panel.AddControl(new SpectreRenderableControl(BuildRichStack(
-            BuildRichShellPanel("about", about),
-            surface,
-            notes)));
+        panel.AddControl(BuildBulletPanel("notes", AccentGrey,
+            "[grey50]This is the SharpConsoleUI command center. Run with redirected stdin/stdout to get the classic prompt shell instead.[/]",
+            "[grey50]CLI sub-commands (list, install, recommend, …) are unchanged — see[/] [green]dotnet skills help[/][grey50].[/]"));
     }
 
     // -------------------------------------------------------------------------
     // Modal + status helpers
     // -------------------------------------------------------------------------
 
-    private void ShowModal(ConsoleWindowSystem ws, string title, SpectreRendering.IRenderable content, params (string Label, Action OnClick)[] buttons)
+    private void ShowModalNative(ConsoleWindowSystem ws, string title, IReadOnlyList<IWindowControl> contents, params (string Label, Action OnClick)[] buttons)
     {
         Window? modal = null;
         var width = Math.Clamp(SafeConsole(() => Console.WindowWidth, 120) - 10, 56, 116);
         var height = Math.Clamp(SafeConsole(() => Console.WindowHeight, 32) - 6, 14, 34);
 
         var body = Controls.ScrollablePanel().Build();
-        body.AddControl(new SpectreRenderableControl(content));
+        foreach (var c in contents)
+        {
+            body.AddControl(c);
+        }
 
         void Close()
         {
@@ -1046,8 +1319,11 @@ internal sealed partial class InteractiveConsoleApp
 
     private void ConfirmModal(ConsoleWindowSystem ws, string title, string message, Action onConfirm)
     {
-        ShowModal(ws, title, BuildRichShellPanel("confirm", new Spectre.Console.Markup($"[yellow]{Escape(message)}[/]"), "yellow"),
-            ("Yes, proceed", onConfirm));
+        var content = new IWindowControl[]
+        {
+            BuildNotePanel("confirm", $"[yellow]{Escape(message)}[/]", AccentYellow),
+        };
+        ShowModalNative(ws, title, content, ("Yes, proceed", onConfirm));
     }
 
     private void ChooseEnumModal<TEnum>(ConsoleWindowSystem ws, string title, TEnum[] values, TEnum current, Action<TEnum> onPicked)
@@ -1228,8 +1504,10 @@ internal sealed partial class InteractiveConsoleApp
             Toast($"Refresh failed: {exception.Message}");
         }
 
+        // RaiseSnapshotChanged fires the AttachSessionEvents handler which calls
+        // RebuildTopStatusBar() + RebuildActivePage(); also bump the bottom bar.
+        Session.RaiseSnapshotChanged();
         RebuildStatusBar(_currentPage);
-        RebuildActivePage();
     }
 
     private void UpdateAllOutdatedFromUi()
@@ -1283,19 +1561,29 @@ internal sealed partial class InteractiveConsoleApp
         var layout = ResolveSkillLayout();
         var installedByName = SafeGet(() => new SkillInstaller(skillCatalog).GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>())
             .ToDictionary(record => record.Skill.Name, StringComparer.OrdinalIgnoreCase);
-        var installable = scan.Recommendations
-            .Where(r => !installedByName.TryGetValue(r.Skill.Name, out var rec) || !rec.IsCurrent)
+        var newSkills = scan.Recommendations
+            .Where(r => !installedByName.ContainsKey(r.Skill.Name))
             .Select(r => r.Skill)
             .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
             .ToArray();
-        if (installable.Length == 0)
+        var outdatedSkills = scan.Recommendations
+            .Where(r => installedByName.TryGetValue(r.Skill.Name, out var rec) && !rec.IsCurrent)
+            .Select(r => r.Skill)
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+            .ToArray();
+        if (newSkills.Length == 0 && outdatedSkills.Length == 0)
         {
             Toast("No new recommended skills to install");
             return;
         }
 
-        var summary = SafeGet(() => new SkillInstaller(skillCatalog).Install(installable, layout, force: false), default(SkillInstallSummary));
-        Toast(summary is null ? "Install failed" : $"Installed {summary.InstalledCount}, skipped {summary.SkippedExisting.Count}");
+        // force=true on outdated entries so existing skill dirs are overwritten, force=false on new ones.
+        var installer = new SkillInstaller(skillCatalog);
+        var newSummary = newSkills.Length == 0 ? default : SafeGet(() => installer.Install(newSkills, layout, force: false), default(SkillInstallSummary));
+        var updateSummary = outdatedSkills.Length == 0 ? default : SafeGet(() => installer.Install(outdatedSkills, layout, force: true), default(SkillInstallSummary));
+        var installedCount = (newSummary?.InstalledCount ?? 0) + (updateSummary?.InstalledCount ?? 0);
+        var skippedCount = (newSummary?.SkippedExisting.Count ?? 0) + (updateSummary?.SkippedExisting.Count ?? 0);
+        Toast(installedCount == 0 && skippedCount == 0 ? "Install failed" : $"Installed {installedCount}, skipped {skippedCount}");
         RebuildActivePage();
     }
 
