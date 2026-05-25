@@ -479,6 +479,26 @@ internal sealed partial class InteractiveConsoleApp
     }
 
     /// <summary>
+    /// One-line identity strip used as a page header. Renders as a single MarkupControl with the
+    /// title in accent + bold, followed by middle-dot separated key/value pairs. Replaces the
+    /// taller BuildPropertyPanel(...) headers so each page can devote vertical space to data
+    /// (tables, graphs) instead of a five-row card. Values are passed in already-marked-up form,
+    /// labels are dimmed by this helper.
+    /// </summary>
+    private static IWindowControl BuildIdentityStrip(string title, Color accent, params (string Label, string Value)[] facts)
+    {
+        var hex = $"#{accent.R:X2}{accent.G:X2}{accent.B:X2}";
+        var parts = new List<string> { $"[bold {hex}]{Escape(title)}[/]" };
+        foreach (var (label, value) in facts)
+        {
+            if (string.IsNullOrEmpty(value)) continue;
+            parts.Add($"[grey50]{Escape(label)}[/] {value}");
+        }
+        var line = string.Join("  [grey50]·[/]  ", parts);
+        return new MarkupControl(new List<string> { line });
+    }
+
+    /// <summary>
     /// Lays out a sequence of cards in a responsive HorizontalGrid with 1, 2, or 3 columns based
     /// on the current console width — the native equivalent of BuildRichCardGrid(maxColumns).
     /// Empty columns at the end of the last row are padded with blank MarkupControls so the cards

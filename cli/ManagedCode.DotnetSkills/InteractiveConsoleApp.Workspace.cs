@@ -37,8 +37,7 @@ internal sealed partial class InteractiveConsoleApp
 
         var filtered = installed.Where(r => MatchesFilter(r.Skill.Name, r.Skill.Stack, r.Skill.Lane)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("installed skills", AccentGreen,
-            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildIdentityStrip("installed skills", AccentGreen,
             ("installed", string.IsNullOrEmpty(_searchFilter) ? installed.Length.ToString() : $"{filtered.Length}/{installed.Length}"),
             ("outdated", outdated.Length == 0 ? "[green]0[/]" : $"[yellow]{outdated.Length}[/]"),
             ("tokens", FormatTokenCount(installed.Sum(record => record.Skill.TokenCount)))));
@@ -185,11 +184,9 @@ internal sealed partial class InteractiveConsoleApp
         var med = scan.Recommendations.Count(r => r.Confidence == RecommendationConfidence.Medium);
         var low = scan.Recommendations.Count(r => r.Confidence == RecommendationConfidence.Low);
 
-        panel.AddControl(BuildPropertyPanel("project scan", AccentDeepSkyBlue,
-            ("project", $"[grey50]{Escape(CompactPath(scan.ProjectRoot.FullName))}[/]"),
+        panel.AddControl(BuildIdentityStrip("project scan", AccentDeepSkyBlue,
             ("scanned", $"{scan.ProjectFiles.Count} project file(s)"),
             ("frameworks", scan.TargetFrameworks.Count == 0 ? "[grey50]unknown[/]" : Escape(string.Join(", ", scan.TargetFrameworks))),
-            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
             ("recommendations", $"{scan.Recommendations.Count}  [grey50]([/][green]{high} high[/][grey50] · [/][yellow]{med} med[/][grey50] · [/][grey]{low} low[/][grey50])[/]")));
 
         if (scan.Recommendations.Count == 0)
@@ -278,8 +275,7 @@ internal sealed partial class InteractiveConsoleApp
         var signals = SafeGet(BuildPackageSignals, Array.Empty<PackageSignalView>());
         var heaviest = skillCatalog.Skills.OrderByDescending(skill => skill.TokenCount).Take(12).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("catalog analysis", AccentDeepSkyBlue,
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildIdentityStrip("catalog analysis", AccentDeepSkyBlue,
             ("collections", views.Length.ToString()),
             ("skills", skillCatalog.Skills.Count.ToString()),
             ("total tokens", FormatTokenCount(skillCatalog.Skills.Sum(skill => skill.TokenCount))),
@@ -397,8 +393,7 @@ internal sealed partial class InteractiveConsoleApp
         var installer = new SkillInstaller(skillCatalog);
         var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
 
-        panel.AddControl(BuildPropertyPanel("remove all installed skills", new Color(200, 60, 60),
-            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildIdentityStrip("remove all installed skills", new Color(200, 60, 60),
             ("installed", installed.Count.ToString())));
 
         if (installed.Count == 0)
@@ -425,8 +420,7 @@ internal sealed partial class InteractiveConsoleApp
             .Where(record => !record.IsCurrent)
             .ToArray();
 
-        panel.AddControl(BuildPropertyPanel("update all outdated skills", AccentYellow,
-            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildIdentityStrip("update all outdated skills", AccentYellow,
             ("outdated", outdated.Length.ToString())));
 
         if (outdated.Length == 0)
@@ -458,13 +452,12 @@ internal sealed partial class InteractiveConsoleApp
 
         var layout = ResolveSkillLayout();
         var agentStatus = ResolveAgentStatus();
-        panel.AddControl(BuildPropertyPanel("workspace", AccentDeepSkyBlue,
-            ("platform", Escape(Session.Agent.ToString())),
-            ("scope", Escape(Session.Scope.ToString())),
-            ("project", Escape(CompactPath(Session.ProjectDirectory ?? Environment.CurrentDirectory))),
+        // Settings is a form, so the strip carries an at-a-glance summary of the install targets
+        // (the StatusBar already carries project/scope/platform; this adds skill+agent targets
+        // because those are the form's subject and aren't surfaced anywhere else).
+        panel.AddControl(BuildIdentityStrip("workspace", AccentDeepSkyBlue,
             ("skill target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
             ("agent target", agentStatus.Layout is null ? $"[red]{Escape(agentStatus.Summary)}[/]" : $"[grey50]{Escape(CompactPath(agentStatus.Layout.PrimaryRoot.FullName))}[/]"),
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("build", ToolVersionInfo.IsDevelopmentBuild ? "[grey50]local development[/]" : "[green]published[/]")));
 
         // Inline form: native dropdowns (change-on-pick, no modal) for Platform/Scope,
@@ -516,6 +509,8 @@ internal sealed partial class InteractiveConsoleApp
     private void BuildAboutPage(ScrollablePanelControl panel)
     {
         panel.ClearContents();
+        // About is a static metadata page — keep the original PropertyPanel because the
+        // information IS the page (no list/table follows). Identity-strip the title row only.
         panel.AddControl(BuildPropertyPanel("about", AccentDeepSkyBlue,
             ("tool", $"{Escape(ToolIdentity.DisplayCommand)}"),
             ("package", Escape(ToolIdentity.PackageId)),

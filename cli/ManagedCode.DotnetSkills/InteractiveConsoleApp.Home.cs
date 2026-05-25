@@ -40,7 +40,7 @@ internal sealed partial class InteractiveConsoleApp
         var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
         var outdated = installed.Count(record => !record.IsCurrent);
 
-        panel.AddControl(BuildPropertyPanel("session", AccentDeepSkyBlue,
+        panel.AddControl(BuildIdentityStrip("session", AccentDeepSkyBlue,
             ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
             ("platform", Escape(Session.Agent.ToString())),
             ("scope", Escape(Session.Scope.ToString())),

@@ -40,9 +40,7 @@ internal sealed partial class InteractiveConsoleApp
 
         var filtered = available.Where(s => MatchesFilter(s.Name, s.Stack, s.Lane)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("skill browser", AccentTurquoise,
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
-            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+        panel.AddControl(BuildIdentityStrip("skill browser", AccentTurquoise,
             ("available", $"{filtered.Length}/{available.Length}"),
             ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
         AddSearchChip(panel);
@@ -129,8 +127,7 @@ internal sealed partial class InteractiveConsoleApp
             .ToArray();
         var filtered = views.Where(v => MatchesFilter(v.Collection)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("collection browser", AccentDeepSkyBlue,
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildIdentityStrip("collection browser", AccentDeepSkyBlue,
             ("collections", string.IsNullOrEmpty(_searchFilter) ? views.Length.ToString() : $"{filtered.Length}/{views.Length}"),
             ("skills", skillCatalog.Skills.Count.ToString()),
             ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
@@ -258,8 +255,7 @@ internal sealed partial class InteractiveConsoleApp
 
         var filtered = packages.Where(p => MatchesFilter(p.Name, p.Title)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel(title, AccentDeepSkyBlue,
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildIdentityStrip(title, AccentDeepSkyBlue,
             (primaryOnly ? "bundles" : "packages", string.IsNullOrEmpty(_searchFilter) ? packages.Length.ToString() : $"{filtered.Length}/{packages.Length}"),
             ("skills covered", skillCatalog.Skills.Count.ToString())));
         AddSearchChip(panel);
@@ -326,8 +322,7 @@ internal sealed partial class InteractiveConsoleApp
         var signals = SafeGet(BuildPackageSignals, Array.Empty<PackageSignalView>());
         var filtered = signals.Where(s => MatchesFilter(s.Signal, s.Skill.Name, s.Skill.Stack, s.Skill.Lane)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("package signals", AccentTurquoise,
-            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+        panel.AddControl(BuildIdentityStrip("package signals", AccentTurquoise,
             ("signals", string.IsNullOrEmpty(_searchFilter) ? signals.Count.ToString() : $"{filtered.Length}/{signals.Count}"),
             ("skills covered", signals.Select(s => s.Skill.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ToString())));
         AddSearchChip(panel);
@@ -378,11 +373,12 @@ internal sealed partial class InteractiveConsoleApp
         var allAgents = agentCatalog.Agents.OrderBy(a => a.Name, StringComparer.Ordinal).ToArray();
         var filteredAgents = allAgents.Where(a => MatchesFilter(a.Name, a.Description)).ToArray();
 
-        panel.AddControl(BuildPropertyPanel("orchestration agents", AccentMediumPurple,
+        // platform + target live in the top StatusBar; surface "unresolved" target here as a
+        // first-class fact because the agent layout has a separate resolver from the skill one.
+        panel.AddControl(BuildIdentityStrip("orchestration agents", AccentMediumPurple,
             ("agents", string.IsNullOrEmpty(_searchFilter) ? agentCatalog.Agents.Count.ToString() : $"{filteredAgents.Length}/{agentCatalog.Agents.Count}"),
-            ("platform", Escape(Session.Agent.ToString())),
-            ("target", layout is null ? $"[red]{Escape(layoutError ?? "unresolved")}[/]" : $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
-            ("installed", layout is null ? "[grey]-[/]" : $"{installed.Count}/{agentCatalog.Agents.Count}")));
+            ("installed", layout is null ? "[grey]-[/]" : $"{installed.Count}/{agentCatalog.Agents.Count}"),
+            ("target", layout is null ? $"[red]{Escape(layoutError ?? "unresolved")}[/]" : string.Empty)));
         AddSearchChip(panel);
 
         if (agentCatalog.Agents.Count == 0)
