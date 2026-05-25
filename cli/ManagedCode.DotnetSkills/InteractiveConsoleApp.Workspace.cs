@@ -188,7 +188,26 @@ internal sealed partial class InteractiveConsoleApp
         panel.AddControl(BuildIdentityStrip("project scan", AccentDeepSkyBlue,
             ("scanned", $"{scan.ProjectFiles.Count} project file(s)"),
             ("frameworks", scan.TargetFrameworks.Count == 0 ? "[grey50]unknown[/]" : Escape(string.Join(", ", scan.TargetFrameworks))),
-            ("recommendations", $"{scan.Recommendations.Count}  [grey50]([/][green]{high} high[/][grey50] · [/][yellow]{med} med[/][grey50] · [/][grey]{low} low[/][grey50])[/]")));
+            ("recommendations", scan.Recommendations.Count.ToString())));
+
+        // Confidence trio — 3 horizontal BarGraphs (high green, med yellow, low grey) so the
+        // user can see the shape of the recommendation set without reading numbers. Confidence
+        // here IS severity-coded (high = trust, low = noise) so a threshold gradient is the
+        // right call rather than a smooth magnitude ramp.
+        if (scan.Recommendations.Count > 0)
+        {
+            var maxConfidence = Math.Max(1, Math.Max(high, Math.Max(med, low)));
+            var confidencePanel = new ScrollablePanelControl
+            {
+                ShowScrollbar = false,
+                EnableMouseWheel = false,
+            };
+            confidencePanel.AddControl(Controls.BarGraph().WithLabel("high").WithLabelWidth(8).WithValue(high).WithMaxValue(maxConfidence).WithValueFormat("0").ShowValue(true).WithFilledColor(AccentGreen).Build());
+            confidencePanel.AddControl(Controls.BarGraph().WithLabel("medium").WithLabelWidth(8).WithValue(med).WithMaxValue(maxConfidence).WithValueFormat("0").ShowValue(true).WithFilledColor(AccentYellow).Build());
+            confidencePanel.AddControl(Controls.BarGraph().WithLabel("low").WithLabelWidth(8).WithValue(low).WithMaxValue(maxConfidence).WithValueFormat("0").ShowValue(true).WithFilledColor(AccentGrey).Build());
+            panel.AddControl(BuildSectionPanel("confidence", string.Empty, AccentDeepSkyBlue));
+            panel.AddControl(confidencePanel);
+        }
 
         if (scan.Recommendations.Count == 0)
         {
@@ -365,6 +384,32 @@ internal sealed partial class InteractiveConsoleApp
             panel.AddControl(chart2);
         }
 
+        // Catalog token distribution — the long-tail shape of skill weights across the entire
+        // catalog. X axis is skill index sorted by tokens desc, Y is tokens. A small number of
+        // mega-skills versus a flat curve is the question this chart answers at a glance.
+        if (skillCatalog.Skills.Count >= 2)
+        {
+            var sortedTokens = skillCatalog.Skills
+                .OrderByDescending(s => s.TokenCount)
+                .Select(s => (double)s.TokenCount)
+                .ToArray();
+            var distribution = Controls.LineGraph()
+                .WithHeight(7)
+                .WithMode(LineGraphMode.Braille)
+                .WithMinValue(0)
+                .WithMaxValue(sortedTokens.Length == 0 ? 1 : sortedTokens.Max())
+                .WithBorder(BorderStyle.Rounded, AccentDeepSkyBlue)
+                .WithBackgroundColor(new Color(15, 22, 38))
+                .WithYAxisLabels(true, "N0")
+                .WithAxisLabelColor(AccentGrey)
+                .WithHighLowLabels(true, AccentDeepSkyBlue, AccentGrey)
+                .AddSeries("tokens", AccentDeepSkyBlue, "cool")
+                .WithData("tokens", sortedTokens)
+                .Build();
+            panel.AddControl(BuildSectionPanel("token distribution (long tail)", string.Empty, AccentDeepSkyBlue));
+            panel.AddControl(distribution);
+        }
+
         if (signals.Count > 0)
         {
             var signalLines = signals.Take(18).Select(signal =>
@@ -374,8 +419,10 @@ internal sealed partial class InteractiveConsoleApp
     }
 
     /// <summary>
-    /// A horizontal bar showing one skill's token weight against the chart's max. Color follows
-    /// a green→yellow→red threshold gradient so heavy skills stand out visually.
+    /// A horizontal bar showing one skill's token weight against the chart's max. Uses a smooth
+    /// "cool" gradient (blue → cyan): heavy tokens are not severity, they're magnitude — the
+    /// previous green→yellow→red gradient read as "warning" against the user instead of
+    /// information about the catalog.
     /// </summary>
     private static BarGraphControl BuildSkillTokenBar(SkillEntry skill, int maxTokens)
         => Controls.BarGraph()
@@ -385,12 +432,13 @@ internal sealed partial class InteractiveConsoleApp
             .WithMaxValue(maxTokens == 0 ? 1 : maxTokens)
             .WithValueFormat("N0")
             .ShowValue(true)
-            .WithStandardGradient()
+            .WithSmoothGradient("cool")
             .Build();
 
     /// <summary>
-    /// A horizontal bar showing one collection's skill count against the chart's max. Uses the
-    /// turquoise accent for the filled portion.
+    /// A horizontal bar showing one collection's skill count against the chart's max. Uses a
+    /// custom warm gradient (yellow → orange) so the two Analysis charts are visually
+    /// distinguishable at a glance.
     /// </summary>
     private static BarGraphControl BuildCollectionCountBar(CollectionCatalogView view, int maxCount)
         => Controls.BarGraph()
@@ -400,7 +448,7 @@ internal sealed partial class InteractiveConsoleApp
             .WithMaxValue(maxCount == 0 ? 1 : maxCount)
             .WithValueFormat("0")
             .ShowValue(true)
-            .WithFilledColor(AccentTurquoise)
+            .WithSmoothGradient(AccentTurquoise, AccentMediumPurple)
             .Build();
 
     // -------------------------------------------------------------------------
