@@ -1,0 +1,468 @@
+// -----------------------------------------------------------------------------
+// Catalog surfaces — the browse pages for Skills, Collections, Bundles,
+// Packages, and Agents. Each page is a list/table of catalog entries with
+// modal-on-Enter detail. Split out of Shell.cs so each surface group lives
+// near its peers.
+// -----------------------------------------------------------------------------
+
+using ManagedCode.DotnetSkills.Runtime;
+using SharpConsoleUI;
+using SharpConsoleUI.Builders;
+using SharpConsoleUI.Controls;
+using SharpConsoleUI.Core;
+using SharpConsoleUI.Drivers;
+using SharpConsoleUI.Helpers;
+using SharpConsoleUI.Layout;
+using SharpConsoleUI.Rendering;
+using SharpConsoleUI.Themes;
+
+namespace ManagedCode.DotnetSkills;
+
+internal sealed partial class InteractiveConsoleApp
+{
+    // -------------------------------------------------------------------------
+    // Skill browser
+    // -------------------------------------------------------------------------
+
+    private void BuildSkillBrowserPage(ConsoleWindowSystem ws, ScrollablePanelControl panel)
+    {
+        panel.ClearContents();
+
+        var layout = ResolveSkillLayout();
+        var installer = new SkillInstaller(skillCatalog);
+        var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
+        var available = skillCatalog.Skills
+            .Where(skill => installed.All(record => !string.Equals(record.Skill.Name, skill.Name, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(skill => CatalogOrganization.GetStackRank(skill.Stack))
+            .ThenBy(skill => skill.Stack, StringComparer.Ordinal)
+            .ThenBy(skill => skill.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        var filtered = available.Where(s => MatchesFilter(s.Name, s.Stack, s.Lane)).ToArray();
+
+        panel.AddControl(BuildPropertyPanel("skill browser", AccentTurquoise,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("target", $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("available", $"{filtered.Length}/{available.Length}"),
+            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
+        AddSearchChip(panel);
+
+        if (available.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("available", "[grey50]Every catalog skill is already installed in this target.[/]", AccentDeepSkyBlue));
+            return;
+        }
+        if (filtered.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("available", $"[grey50]No skills match “{Escape(_searchFilter)}”.[/]", AccentYellow));
+            return;
+        }
+
+        var list = StyledList("Available skills (Enter for details)")
+            .MaxVisibleItems(16)
+            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        foreach (var skill in filtered)
+        {
+            // ListControl parses item text as markup; BuildSkillChoiceLabel produces plain
+            // text containing bracketed stack/lane like "[.NET Foundations / ...]". Escape so
+            // brackets are not interpreted as Spectre markup tags.
+            list.AddItem(Escape(BuildSkillChoiceLabel(skill, installed)), skill);
+        }
+        list.OnItemActivated((_, item) =>
+        {
+            if (item.Tag is SkillEntry skill)
+            {
+                ShowSkillDetailModal(ws, panel, skill);
+            }
+        });
+        panel.AddControl(list.Build());
+    }
+
+    private void ShowSkillDetailModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillEntry skill)
+    {
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(ToAlias(skill.Name), AccentTurquoise,
+                ("skill", Escape(skill.Name)),
+                ("collection", Escape(skill.Stack)),
+                ("lane", Escape(skill.Lane)),
+                ("version", Escape(skill.Version)),
+                ("tokens", FormatTokenCount(skill.TokenCount))),
+            BuildNotePanel("summary", Escape(skill.Description), AccentDeepSkyBlue),
+            BuildNotePanel("preview", Escape(LoadSkillPreview(skill)), AccentGrey),
+        };
+
+        ShowModalNative(ws, $"Skill · {ToAlias(skill.Name)}", detail,
+            ("Install into current target", () =>
+            {
+                var summary = SafeGet(() => new SkillInstaller(skillCatalog).Install(new[] { skill }, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
+                if (summary is null)
+                    Toast($"Install failed for {ToAlias(skill.Name)}", NotificationSeverity.Danger);
+                else
+                    Toast($"{ToAlias(skill.Name)}: {summary.InstalledCount} written, {summary.SkippedExisting.Count} skipped", NotificationSeverity.Success);
+                BuildSkillBrowserPage(ws, owner);
+            }),
+            ("Force reinstall", () =>
+            {
+                var summary = SafeGet(() => new SkillInstaller(skillCatalog).Install(new[] { skill }, ResolveSkillLayout(), force: true), default(SkillInstallSummary));
+                if (summary is null)
+                    Toast($"Install failed for {ToAlias(skill.Name)}", NotificationSeverity.Danger);
+                else
+                    Toast($"{ToAlias(skill.Name)}: reinstalled ({summary.InstalledCount} written)", NotificationSeverity.Success);
+                BuildSkillBrowserPage(ws, owner);
+            }));
+    }
+    // -------------------------------------------------------------------------
+    // Collections
+    // -------------------------------------------------------------------------
+
+    private void BuildCollectionsPage(ConsoleWindowSystem ws, ScrollablePanelControl panel)
+    {
+        panel.ClearContents();
+
+        var layout = ResolveSkillLayout();
+        var installer = new SkillInstaller(skillCatalog);
+        var installed = SafeGet(() => installer.GetInstalledSkills(layout), Array.Empty<InstalledSkillRecord>());
+        var views = BuildCollectionViews(installed)
+            .OrderBy(view => CatalogOrganization.GetStackRank(view.Collection))
+            .ThenBy(view => view.Collection, StringComparer.Ordinal)
+            .ToArray();
+        var filtered = views.Where(v => MatchesFilter(v.Collection)).ToArray();
+
+        panel.AddControl(BuildPropertyPanel("collection browser", AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("collections", string.IsNullOrEmpty(_searchFilter) ? views.Length.ToString() : $"{filtered.Length}/{views.Length}"),
+            ("skills", skillCatalog.Skills.Count.ToString()),
+            ("installed", $"{installed.Count}/{skillCatalog.Skills.Count}")));
+        AddSearchChip(panel);
+
+        if (views.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("collections", "[grey50]No collections in this catalog version.[/]", AccentDeepSkyBlue));
+            return;
+        }
+        if (filtered.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("collections", $"[grey50]No collections match “{Escape(_searchFilter)}”.[/]", AccentYellow));
+            return;
+        }
+
+        // Master-detail layout. Left column lists collections; right column shows the detail of
+        // _selectedCollection. Clicking a left-list row updates only the right pane in place —
+        // no modal, no full-page rebuild. The right pane is a ScrollablePanel so the detail can
+        // grow with the collection's lane list.
+        if (_selectedCollection is null
+            || !filtered.Any(v => string.Equals(v.Collection, _selectedCollection.Collection, StringComparison.OrdinalIgnoreCase)))
+        {
+            _selectedCollection = filtered[0];
+            _collectionInstallArmed = false;
+        }
+
+        // Build the detail pane as a standalone ScrollablePanelControl so we can update it
+        // independently of the left list when the user changes selection.
+        var rightPane = new ScrollablePanelControl
+        {
+            ShowScrollbar = true,
+            VerticalScrollMode = ScrollMode.Scroll,
+            EnableMouseWheel = true,
+        };
+
+        var grid = Controls.HorizontalGrid()
+            .Column(col =>
+            {
+                col.Flex(1);
+                var list = StyledList("Collections")
+                    .MaxVisibleItems(20)
+                    .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+                foreach (var view in filtered)
+                {
+                    list.AddItem(Escape(BuildCollectionChoiceLabel(view)), view);
+                }
+                list.OnItemActivated((_, item) =>
+                {
+                    if (item.Tag is CollectionCatalogView v)
+                    {
+                        _selectedCollection = v;
+                        _collectionInstallArmed = false;
+                        BuildCollectionDetail(rightPane, v);
+                    }
+                });
+                col.Add(list.Build());
+            })
+            .Column(col =>
+            {
+                col.Flex(2).Add(rightPane);
+            })
+            .Build();
+
+        panel.AddControl(grid);
+        BuildCollectionDetail(rightPane, _selectedCollection!);
+    }
+
+    /// <summary>
+    /// Renders the right pane of the Collections master-detail view: stats, lanes, and an inline
+    /// two-stage install button (first click arms, second commits — satisfies AGENTS.md's
+    /// "install overview before confirmation" rule without a modal).
+    /// </summary>
+    private void BuildCollectionDetail(ScrollablePanelControl pane, CollectionCatalogView view)
+    {
+        pane.ClearContents();
+        pane.AddControl(BuildPropertyPanel(view.Collection, AccentDeepSkyBlue,
+            ("collection", Escape(view.Collection)),
+            ("lanes", view.Lanes.Count.ToString()),
+            ("skills", $"{view.InstalledCount}/{view.SkillCount}"),
+            ("tokens", FormatTokenCount(view.TokenCount))));
+
+        if (view.Lanes.Count > 0)
+        {
+            pane.AddControl(BuildBulletPanel("lanes", AccentTurquoise,
+                view.Lanes.Select(lane => $"[grey50]·[/] [grey]{Escape(lane.Lane)}[/] [grey50]({lane.InstalledCount}/{lane.Skills.Count} skills, {FormatTokenCount(lane.TokenCount)} tokens)[/]").ToArray()));
+        }
+
+        var armed = _collectionInstallArmed;
+        var label = armed
+            ? $"Click again to install all {view.SkillCount} skill(s)"
+            : $"Install collection ({view.SkillCount} skill(s))";
+        pane.AddControl(Controls.Button(label)
+            .OnClick((_, _) =>
+            {
+                if (!_collectionInstallArmed)
+                {
+                    _collectionInstallArmed = true;
+                    Toast($"Click again to confirm installing {view.SkillCount} skill(s)", NotificationSeverity.Warning);
+                    BuildCollectionDetail(pane, view);
+                    return;
+                }
+                var skills = SafeGet(() => new SkillInstaller(skillCatalog).SelectSkillsFromCollections(new[] { view.Collection }), Array.Empty<SkillEntry>());
+                var summary = skills.Count == 0 ? null : SafeGet(() => new SkillInstaller(skillCatalog).Install(skills, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
+                ToastResult(summary, $"Could not install collection {view.Collection}", summary is null ? string.Empty : $"{view.Collection}: {summary.InstalledCount} written, {summary.SkippedExisting.Count} skipped");
+                _collectionInstallArmed = false;
+                if (_ws is not null && _activePanel is not null) BuildCollectionsPage(_ws, _activePanel);
+            }).Build());
+    }
+
+    // -------------------------------------------------------------------------
+    // Bundles / packages
+    // -------------------------------------------------------------------------
+
+    private void BuildBundlesPage(ConsoleWindowSystem ws, ScrollablePanelControl panel, bool primaryOnly)
+    {
+        panel.ClearContents();
+
+        var packages = (primaryOnly
+                ? GetPrimaryBundles()
+                : skillCatalog.Packages.OrderBy(p => p.Name, StringComparer.Ordinal).ToArray())
+            .ToArray();
+        var title = primaryOnly ? "focused bundles" : "catalog packages";
+        var skillTokens = skillCatalog.Skills.ToDictionary(skill => skill.Name, skill => skill.TokenCount, StringComparer.OrdinalIgnoreCase);
+
+        var filtered = packages.Where(p => MatchesFilter(p.Name, p.Title)).ToArray();
+
+        panel.AddControl(BuildPropertyPanel(title, AccentDeepSkyBlue,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            (primaryOnly ? "bundles" : "packages", string.IsNullOrEmpty(_searchFilter) ? packages.Length.ToString() : $"{filtered.Length}/{packages.Length}"),
+            ("skills covered", skillCatalog.Skills.Count.ToString())));
+        AddSearchChip(panel);
+
+        if (packages.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel(title, "[grey50]Nothing available in this catalog version.[/]", AccentDeepSkyBlue));
+            return;
+        }
+        if (filtered.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel(title, $"[grey50]No bundles match “{Escape(_searchFilter)}”.[/]", AccentYellow));
+            return;
+        }
+
+        var list = StyledList($"{(primaryOnly ? "Bundles" : "Packages")} (Enter for details)")
+            .MaxVisibleItems(16)
+            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        foreach (var package in filtered)
+        {
+            var tokenCount = package.Skills.Sum(name => skillTokens.TryGetValue(name, out var value) ? value : 0);
+            list.AddItem($"{Escape(package.Name)}  [dim]({package.Skills.Count} skills, {FormatTokenCount(tokenCount)} tokens)[/]", package);
+        }
+        list.OnItemActivated((_, item) =>
+        {
+            if (item.Tag is SkillPackageEntry package)
+            {
+                ShowBundleModal(ws, panel, package, primaryOnly);
+            }
+        });
+        panel.AddControl(list.Build());
+    }
+
+    private void ShowBundleModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillPackageEntry package, bool primaryOnly)
+    {
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(package.Name, AccentTurquoise,
+                ("package", Escape(package.Name)),
+                ("title", Escape(package.Title)),
+                ("skills", package.Skills.Count.ToString()),
+                ("includes", Escape(string.Join(", ", package.Skills.Take(10).Select(ToAlias))))),
+            BuildNotePanel("summary", Escape(package.Description), AccentDeepSkyBlue),
+        };
+
+        ShowModalNative(ws, $"Bundle · {package.Name}", detail,
+            ("Install bundle into current target", () =>
+            {
+                var skills = SafeGet(() => new SkillInstaller(skillCatalog).SelectSkillsFromPackages(new[] { package.Name }), Array.Empty<SkillEntry>());
+                var summary = skills.Count == 0 ? null : SafeGet(() => new SkillInstaller(skillCatalog).Install(skills, ResolveSkillLayout(), force: false), default(SkillInstallSummary));
+                ToastResult(summary, $"Could not install bundle {package.Name}", summary is null ? string.Empty : $"{package.Name}: {summary.InstalledCount} written, {summary.SkippedExisting.Count} skipped");
+                BuildBundlesPage(ws, owner, primaryOnly);
+            }));
+    }
+
+    // -------------------------------------------------------------------------
+    // Packages — NuGet ids / prefixes → catalog skills
+    // -------------------------------------------------------------------------
+
+    private void BuildPackagesPage(ConsoleWindowSystem ws, ScrollablePanelControl panel)
+    {
+        panel.ClearContents();
+
+        var signals = SafeGet(BuildPackageSignals, Array.Empty<PackageSignalView>());
+        var filtered = signals.Where(s => MatchesFilter(s.Signal, s.Skill.Name, s.Skill.Stack, s.Skill.Lane)).ToArray();
+
+        panel.AddControl(BuildPropertyPanel("package signals", AccentTurquoise,
+            ("catalog", $"{Escape(skillCatalog.SourceLabel)} [grey50]({Escape(skillCatalog.CatalogVersion)})[/]"),
+            ("signals", string.IsNullOrEmpty(_searchFilter) ? signals.Count.ToString() : $"{filtered.Length}/{signals.Count}"),
+            ("skills covered", signals.Select(s => s.Skill.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ToString())));
+        AddSearchChip(panel);
+
+        if (signals.Count == 0)
+        {
+            panel.AddControl(BuildNotePanel("packages", "[grey50]No NuGet package or prefix signals are present in this catalog version.[/]", AccentDeepSkyBlue));
+            return;
+        }
+        if (filtered.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("packages", $"[grey50]No signals match “{Escape(_searchFilter)}”.[/]", AccentYellow));
+            return;
+        }
+
+        var list = StyledList("Package signals (Enter to inspect linked skill)")
+            .MaxVisibleItems(16)
+            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        foreach (var signal in filtered)
+        {
+            // ListControl renders item text as markup — escape the whole plain-text label.
+            list.AddItem(Escape($"{signal.Signal} [{signal.Kind}] -> {ToAlias(signal.Skill.Name)} [{signal.Skill.Stack} / {signal.Skill.Lane}] ({FormatTokenCount(signal.Skill.TokenCount)} tokens)"), signal);
+        }
+        list.OnItemActivated((_, item) =>
+        {
+            if (item.Tag is PackageSignalView signal)
+            {
+                ShowSkillDetailModal(ws, panel, signal.Skill);
+            }
+        });
+        panel.AddControl(list.Build());
+    }
+
+    // -------------------------------------------------------------------------
+    // Agents
+    // -------------------------------------------------------------------------
+
+    private void BuildAgentsPage(ConsoleWindowSystem ws, ScrollablePanelControl panel)
+    {
+        panel.ClearContents();
+
+        var layout = TryResolveAgentLayout(out var layoutError);
+        var installer = new AgentInstaller(agentCatalog);
+        var installed = layout is null
+            ? Array.Empty<InstalledAgentRecord>()
+            : SafeGet(() => installer.GetInstalledAgents(layout), Array.Empty<InstalledAgentRecord>());
+
+        var allAgents = agentCatalog.Agents.OrderBy(a => a.Name, StringComparer.Ordinal).ToArray();
+        var filteredAgents = allAgents.Where(a => MatchesFilter(a.Name, a.Description)).ToArray();
+
+        panel.AddControl(BuildPropertyPanel("orchestration agents", AccentMediumPurple,
+            ("agents", string.IsNullOrEmpty(_searchFilter) ? agentCatalog.Agents.Count.ToString() : $"{filteredAgents.Length}/{agentCatalog.Agents.Count}"),
+            ("platform", Escape(Session.Agent.ToString())),
+            ("target", layout is null ? $"[red]{Escape(layoutError ?? "unresolved")}[/]" : $"[grey50]{Escape(CompactPath(layout.PrimaryRoot.FullName))}[/]"),
+            ("installed", layout is null ? "[grey]-[/]" : $"{installed.Count}/{agentCatalog.Agents.Count}")));
+        AddSearchChip(panel);
+
+        if (agentCatalog.Agents.Count == 0)
+        {
+            panel.AddControl(BuildNotePanel("agents", "[grey50]No agents available in the catalog.[/]", AccentDeepSkyBlue));
+            return;
+        }
+        if (filteredAgents.Length == 0)
+        {
+            panel.AddControl(BuildNotePanel("agents", $"[grey50]No agents match “{Escape(_searchFilter)}”.[/]", AccentYellow));
+            return;
+        }
+
+        var list = StyledList("Agents (Enter for details)")
+            .MaxVisibleItems(14)
+            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        foreach (var agent in filteredAgents)
+        {
+            var isInstalled = installed.Any(i => string.Equals(i.Agent.Name, agent.Name, StringComparison.OrdinalIgnoreCase));
+            list.AddItem($"{(isInstalled ? "✓ " : "○ ")}{Escape(ToAlias(agent.Name))}  [dim]{Escape(CompactDescription(agent.Description))}[/]", agent);
+        }
+        list.OnItemActivated((_, item) =>
+        {
+            if (item.Tag is AgentEntry agent)
+            {
+                ShowAgentModal(ws, panel, agent);
+            }
+        });
+        panel.AddControl(list.Build());
+
+        if (layout is null)
+        {
+            panel.AddControl(BuildNotePanel("note", "[yellow]No native agent directory resolved. Set the platform on the Settings page, or create one of .codex/.claude/.github/.gemini/.junie.[/]", AccentYellow));
+            return;
+        }
+
+        panel.AddControl(Controls.Button("Install all agents into detected native directories")
+            .OnClick((_, _) =>
+            {
+                var detected = SafeGet(() => AgentInstallTarget.ResolveAllDetected(Session.ProjectDirectory, Session.Scope), Array.Empty<AgentInstallLayout>());
+                if (detected.Count == 0)
+                {
+                    Toast("No native agent directories detected", NotificationSeverity.Warning);
+                    return;
+                }
+                var summary2 = SafeGet(() => new AgentInstaller(agentCatalog).InstallToMultiple(agentCatalog.Agents, detected, force: false), default(AgentInstallSummary));
+                ToastResult(summary2, "Install failed", summary2 is null ? string.Empty : $"Installed {summary2.InstalledCount} agent file(s) across {detected.Count} platform(s)");
+                BuildAgentsPage(ws, panel);
+            }).Build());
+    }
+
+    private void ShowAgentModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, AgentEntry agent)
+    {
+        var detail = new IWindowControl[]
+        {
+            BuildPropertyPanel(ToAlias(agent.Name), AccentMediumPurple,
+                ("agent", Escape(agent.Name)),
+                ("skills", agent.Skills.Count == 0 ? "[grey50]-[/]" : Escape(string.Join(", ", agent.Skills.Select(ToAlias)))),
+                ("platform", Escape(Session.Agent.ToString()))),
+            BuildNotePanel("summary", Escape(agent.Description), AccentDeepSkyBlue),
+        };
+
+        var buttons = new List<(string, Action)>();
+        var layout = TryResolveAgentLayout(out _);
+        if (layout is not null)
+        {
+            buttons.Add(("Install into current target", () =>
+            {
+                var summary = SafeGet(() => new AgentInstaller(agentCatalog).Install(new[] { agent }, layout, force: false), default(AgentInstallSummary));
+                ToastResult(summary, "Install failed", summary is null ? string.Empty : $"{ToAlias(agent.Name)}: {summary.InstalledCount} written, {summary.SkippedExisting.Count} skipped");
+                BuildAgentsPage(ws, owner);
+            }));
+            buttons.Add(("Remove from current target", () =>
+            {
+                var summary = SafeGet(() => new AgentInstaller(agentCatalog).Remove(new[] { agent }, layout), default(AgentRemoveSummary));
+                ToastResult(summary, "Remove failed", summary is null ? string.Empty : $"Removed {ToAlias(agent.Name)} ({summary.RemovedCount} file(s))");
+                BuildAgentsPage(ws, owner);
+            }));
+        }
+
+        ShowModalNative(ws, $"Agent · {ToAlias(agent.Name)}", detail, buttons.ToArray());
+    }
+}
