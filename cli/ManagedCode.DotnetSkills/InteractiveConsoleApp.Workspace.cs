@@ -195,9 +195,19 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList("Recommended skills (Enter to install)")
-            .MaxVisibleItems(16)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        // Confidence cell renders as the same ●●● marker as the legacy list so the visual
+        // grammar is preserved; the column itself is sortable, and the default sort
+        // (Confidence desc) is applied via the row insertion order.
+        var table = Controls.Table()
+            .WithTitle("Recommended skills (Enter to install)")
+            .AddColumn("Confidence", TextJustification.Center, width: 12)
+            .AddColumn("Status", width: 12)
+            .AddColumn("Skill")
+            .AddColumn("Reasons")
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentDeepSkyBlue);
+        var builtTable = table.Build();
         foreach (var recommendation in scan.Recommendations
                      .OrderByDescending(r => r.Confidence)
                      .ThenBy(r => r.Skill.Name, StringComparer.Ordinal))
@@ -210,11 +220,18 @@ internal sealed partial class InteractiveConsoleApp
             };
             installedByName.TryGetValue(recommendation.Skill.Name, out var record);
             var status = record is null ? "[deepskyblue1]new[/]" : record.IsCurrent ? "[green]installed[/]" : "[yellow]update[/]";
-            list.AddItem($"{marker} {Escape(ToAlias(recommendation.Skill.Name))}  [dim]{status}[/]  [grey]{Escape(string.Join("; ", recommendation.Reasons.Take(2)))}[/]", recommendation);
+            builtTable.AddRow(new TableRow(
+                marker,
+                status,
+                ToAlias(recommendation.Skill.Name),
+                Escape(string.Join("; ", recommendation.Reasons.Take(2))))
+            {
+                Tag = recommendation,
+            });
         }
-        list.OnItemActivated((_, item) =>
+        builtTable.RowActivated += (_, _) =>
         {
-            if (item.Tag is ProjectSkillRecommendation recommendation)
+            if (builtTable.SelectedRow?.Tag is ProjectSkillRecommendation recommendation)
             {
                 // Outdated recommendations need force=true: SkillInstaller.Install skips
                 // existing skill directories unless forced, so an "update" entry would
@@ -224,8 +241,8 @@ internal sealed partial class InteractiveConsoleApp
                 ToastResult(summary2, $"Install failed for {ToAlias(recommendation.Skill.Name)}", summary2 is null ? string.Empty : $"{ToAlias(recommendation.Skill.Name)}: {summary2.InstalledCount} written, {summary2.SkippedExisting.Count} skipped");
                 BuildProjectPage(ws, panel);
             }
-        });
-        panel.AddControl(list.Build());
+        };
+        panel.AddControl(builtTable);
 
         // Split recommendations: new ones install with force=false, outdated ones need
         // force=true so the existing skill directory is overwritten with the latest version.

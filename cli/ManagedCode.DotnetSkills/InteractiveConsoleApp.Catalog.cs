@@ -56,24 +56,43 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList("Available skills (Enter for details)")
-            .MaxVisibleItems(16)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        // Sortable table — five logical dimensions (Collection, Lane, Skill, Version, Tokens)
+        // are columns instead of a single bracketed markup-salad row. Default sort matches the
+        // legacy ListControl order: by collection rank then collection name then skill name,
+        // already baked into the `available` ordering above.
+        var table = Controls.Table()
+            .WithTitle("Available skills (Enter for details)")
+            .AddColumn("Collection")
+            .AddColumn("Lane")
+            .AddColumn("Skill")
+            .AddColumn("Version", TextJustification.Right)
+            .AddColumn("Tokens", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentTurquoise);
+        var builtTable = table.Build();
         foreach (var skill in filtered)
         {
-            // ListControl parses item text as markup; BuildSkillChoiceLabel produces plain
-            // text containing bracketed stack/lane like "[.NET Foundations / ...]". Escape so
-            // brackets are not interpreted as Spectre markup tags.
-            list.AddItem(Escape(BuildSkillChoiceLabel(skill, installed)), skill);
+            builtTable.AddRow(new TableRow(
+                skill.Stack,
+                skill.Lane,
+                ToAlias(skill.Name),
+                skill.Version,
+                FormatTokenCount(skill.TokenCount))
+            {
+                Tag = skill,
+            });
         }
-        list.OnItemActivated((_, item) =>
+        // Use SelectedRow.Tag to recover the skill — the display index changes when the user
+        // re-sorts via column header click, so indexing into `filtered` would be wrong.
+        builtTable.RowActivated += (_, _) =>
         {
-            if (item.Tag is SkillEntry skill)
+            if (builtTable.SelectedRow?.Tag is SkillEntry skill)
             {
                 ShowSkillDetailModal(ws, panel, skill);
             }
-        });
-        panel.AddControl(list.Build());
+        };
+        panel.AddControl(builtTable);
     }
 
     private void ShowSkillDetailModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillEntry skill)
@@ -271,22 +290,36 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList($"{(primaryOnly ? "Bundles" : "Packages")} (Enter for details)")
-            .MaxVisibleItems(16)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        var table = Controls.Table()
+            .WithTitle($"{(primaryOnly ? "Bundles" : "Packages")} (Enter for details)")
+            .AddColumn("Bundle")
+            .AddColumn("Title")
+            .AddColumn("Skills", TextJustification.Right)
+            .AddColumn("Tokens", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentDeepSkyBlue);
+        var builtTable = table.Build();
         foreach (var package in filtered)
         {
             var tokenCount = package.Skills.Sum(name => skillTokens.TryGetValue(name, out var value) ? value : 0);
-            list.AddItem($"{Escape(package.Name)}  [dim]({package.Skills.Count} skills, {FormatTokenCount(tokenCount)} tokens)[/]", package);
+            builtTable.AddRow(new TableRow(
+                package.Name,
+                package.Title,
+                package.Skills.Count.ToString(),
+                FormatTokenCount(tokenCount))
+            {
+                Tag = package,
+            });
         }
-        list.OnItemActivated((_, item) =>
+        builtTable.RowActivated += (_, _) =>
         {
-            if (item.Tag is SkillPackageEntry package)
+            if (builtTable.SelectedRow?.Tag is SkillPackageEntry package)
             {
                 ShowBundleModal(ws, panel, package, primaryOnly);
             }
-        });
-        panel.AddControl(list.Build());
+        };
+        panel.AddControl(builtTable);
     }
 
     private void ShowBundleModal(ConsoleWindowSystem ws, ScrollablePanelControl owner, SkillPackageEntry package, bool primaryOnly)
@@ -338,22 +371,39 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList("Package signals (Enter to inspect linked skill)")
-            .MaxVisibleItems(16)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        var table = Controls.Table()
+            .WithTitle("Package signals (Enter to inspect linked skill)")
+            .AddColumn("Signal")
+            .AddColumn("Kind")
+            .AddColumn("Skill")
+            .AddColumn("Collection")
+            .AddColumn("Lane")
+            .AddColumn("Tokens", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentTurquoise);
+        var builtTable = table.Build();
         foreach (var signal in filtered)
         {
-            // ListControl renders item text as markup — escape the whole plain-text label.
-            list.AddItem(Escape($"{signal.Signal} [{signal.Kind}] -> {ToAlias(signal.Skill.Name)} [{signal.Skill.Stack} / {signal.Skill.Lane}] ({FormatTokenCount(signal.Skill.TokenCount)} tokens)"), signal);
+            builtTable.AddRow(new TableRow(
+                signal.Signal,
+                signal.Kind,
+                ToAlias(signal.Skill.Name),
+                signal.Skill.Stack,
+                signal.Skill.Lane,
+                FormatTokenCount(signal.Skill.TokenCount))
+            {
+                Tag = signal,
+            });
         }
-        list.OnItemActivated((_, item) =>
+        builtTable.RowActivated += (_, _) =>
         {
-            if (item.Tag is PackageSignalView signal)
+            if (builtTable.SelectedRow?.Tag is PackageSignalView signal)
             {
                 ShowSkillDetailModal(ws, panel, signal.Skill);
             }
-        });
-        panel.AddControl(list.Build());
+        };
+        panel.AddControl(builtTable);
     }
 
     // -------------------------------------------------------------------------
@@ -392,22 +442,36 @@ internal sealed partial class InteractiveConsoleApp
             return;
         }
 
-        var list = StyledList("Agents (Enter for details)")
-            .MaxVisibleItems(14)
-            .WithScrollbarVisibility(ScrollbarVisibility.Auto);
+        var table = Controls.Table()
+            .WithTitle("Agents (Enter for details)")
+            .AddColumn("Status", TextJustification.Center, width: 8)
+            .AddColumn("Agent")
+            .AddColumn("Description")
+            .AddColumn("Skills", TextJustification.Right)
+            .WithSorting()
+            .Rounded()
+            .WithBorderColor(AccentMediumPurple);
+        var builtTable = table.Build();
         foreach (var agent in filteredAgents)
         {
             var isInstalled = installed.Any(i => string.Equals(i.Agent.Name, agent.Name, StringComparison.OrdinalIgnoreCase));
-            list.AddItem($"{(isInstalled ? "✓ " : "○ ")}{Escape(ToAlias(agent.Name))}  [dim]{Escape(CompactDescription(agent.Description))}[/]", agent);
+            builtTable.AddRow(new TableRow(
+                isInstalled ? "✓ installed" : "○ available",
+                ToAlias(agent.Name),
+                CompactDescription(agent.Description),
+                agent.Skills.Count.ToString())
+            {
+                Tag = agent,
+            });
         }
-        list.OnItemActivated((_, item) =>
+        builtTable.RowActivated += (_, _) =>
         {
-            if (item.Tag is AgentEntry agent)
+            if (builtTable.SelectedRow?.Tag is AgentEntry agent)
             {
                 ShowAgentModal(ws, panel, agent);
             }
-        });
-        panel.AddControl(list.Build());
+        };
+        panel.AddControl(builtTable);
 
         if (layout is null)
         {
