@@ -2,10 +2,10 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Update binlog mcp name (#684)
-      sha: 0724ccf8ac485af4b6bf95b2489886cc33f170a3
+      commitTitle: Add blazor skills to dotnet-blazor plugin (#357)...
+      sha: 198e58c98363999372f38553bd4ab89e2e8a18ba
       tags:
-      - skill-validator-nightly
+      - skill-validator-nightly-6-g198e58c
     path: dotnet-skills
   path: upstreams
 kind: LockConfig
