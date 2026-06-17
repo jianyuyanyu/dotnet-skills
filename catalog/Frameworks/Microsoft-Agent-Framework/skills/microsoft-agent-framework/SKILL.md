@@ -62,6 +62,7 @@ flowchart LR
 - Hosting layers such as OpenAI-compatible HTTP, A2A, and AG-UI are adapters over your in-process agent or workflow. They do not replace the core architecture choice.
 - Durable agents are a hosting and persistence decision for Azure Functions. They are not the default answer for ordinary app-level orchestration.
 - Current Learn docs now consolidate middleware under `agents/middleware` and tools under `agents/tools/*`; older tutorial URLs can redirect to the same canonical page, so prefer the canonical path when exact signatures or headings matter.
+- The June 2026 Learn refresh adds deeper AG-UI, AutoGen migration, Semantic Kernel migration, support, troubleshooting, and upgrade pages. Load the relevant reference before writing AG-UI protocol, migration, or production-support guidance instead of relying only on the top-level overview.
 
 ## Decision Cheatsheet
 

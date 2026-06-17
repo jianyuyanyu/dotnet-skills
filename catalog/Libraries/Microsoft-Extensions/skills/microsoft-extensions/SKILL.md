@@ -19,7 +19,8 @@ compatibility: "Relevant to console apps, workers, ASP.NET Core apps, functions,
 3. Use options binding for structured configuration and validate configuration at startup when bad settings would fail later at runtime.
 4. Prefer `IHttpClientFactory` and typed or named clients for outbound HTTP instead of ad-hoc singleton or per-call `HttpClient` usage.
 5. Use logging categories and config-driven log levels rather than scattered ad-hoc logging behavior.
-6. Avoid building mini-frameworks over Microsoft.Extensions unless the repo genuinely needs reusable composition primitives.
+6. For Kubernetes-hosted services, prefer the stable `Microsoft.Extensions.Diagnostics.ResourceMonitoring.Kubernetes` package from the 10.7 line when CPU/memory request and limit metrics should come from pod resource quotas.
+7. Avoid building mini-frameworks over Microsoft.Extensions unless the repo genuinely needs reusable composition primitives.
 
 ## Deliver
 
@@ -32,6 +33,7 @@ compatibility: "Relevant to console apps, workers, ASP.NET Core apps, functions,
 - service lifetimes are correct
 - configuration is strongly typed where it matters
 - host setup remains easy to debug and reason about
+- Kubernetes resource monitoring uses the stable quota-provider APIs when pod request/limit dimensions matter
 
 ## References
 

@@ -1,9 +1,9 @@
 {
-  "name": "dotnet-aspnet",
-  "title": "Official .NET skills: dotnet-aspnet",
+  "name": "dotnet-aspnetcore",
+  "title": "Official .NET skills: ASP.NET Core",
   "description": "ASP.NET Core web development skills including middleware, endpoints, real-time communication, and API patterns.",
   "links": {
     "repository": "https://github.com/dotnet/skills",
-    "docs": "https://github.com/dotnet/skills/tree/main/plugins/dotnet-aspnet"
+    "docs": "https://github.com/dotnet/skills/tree/main/plugins/dotnet-aspnetcore"
   }
 }

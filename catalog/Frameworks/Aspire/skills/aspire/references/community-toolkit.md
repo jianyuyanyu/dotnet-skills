@@ -4,7 +4,7 @@ Use this reference when official first-party Aspire integrations do not cover th
 
 Last verified against:
 
-- `CommunityToolkit/Aspire` release `v13.1.1` published on `2026-01-16`
+- `CommunityToolkit/Aspire` release `v13.4.0` published on `2026-06-02`
 - the current repository README package index and Microsoft Learn Community Toolkit pages
 
 ## Table of Contents
@@ -40,6 +40,7 @@ Do not reach for it simply because it exists. First-party Aspire remains the def
 - you want extra dev-time tools such as MailPit, ngrok, k6, McpInspector, Adminer, or DbGate in the topology
 - you need community-maintained integrations such as Meilisearch, MinIO, RavenDB, SurrealDB, KurrentDB, LavinMQ, or Zitadel
 - you need extension packages around existing first-party resources, such as Redis, PostgreSQL, SQL Server, MySQL, MongoDB, Keycloak, Elasticsearch, or OpenTelemetry Collector support
+- you need newer 13.4 toolkit additions such as DuckDB hosting/client support, the bacon hosting integration, or analyzer support around Aspire integration usage
 
 ## Package families
 
@@ -58,7 +59,7 @@ Use these when the AppHost must orchestrate non-.NET executable projects:
 - `CommunityToolkit.Aspire.Hosting.Bun`
 - `CommunityToolkit.Aspire.Hosting.Rust`
 
-These are especially important because current AppHost guidance explicitly points to toolkit integrations for Go and Java, while JavaScript has first-party coverage and Python often routes through the toolkit extension path.
+These are especially important because current AppHost guidance explicitly points to toolkit integrations for Go and Java, while JavaScript has first-party coverage and Python often routes through the toolkit extension path. In the 13.4 release train, prefer core `Aspire.Hosting.JavaScript` over the now-deprecated toolkit Bun hosting integration when first-party JavaScript hosting covers the scenario.
 
 ### Databases, object stores, and search
 
@@ -78,6 +79,8 @@ Use these when the missing capability is a specific backing technology:
 - `CommunityToolkit.Aspire.Hosting.SurrealDb`
 - `CommunityToolkit.Aspire.SurrealDb`
 - `CommunityToolkit.Aspire.Hosting.SqlDatabaseProjects`
+- `CommunityToolkit.Aspire.Hosting.DuckDB`
+- `CommunityToolkit.Aspire.DuckDB.Client`
 
 This family is often the fastest way to keep uncommon data dependencies inside the Aspire app model instead of documenting them as external setup steps.
 

@@ -43,6 +43,7 @@ compatibility: "Requires Semantic Kernel 1.x packages (.NET 8+)."
 3. **Configure Function Calling** for automatic tool use
 4. **Handle Responses** and manage conversation state
 5. **Test and Observe** AI behavior with logging
+6. For Semantic Kernel `dotnet-1.77.0` and later, keep OpenAPI plugin server URL validation enabled by default unless a trusted migration path requires a temporary exception, and use the updated Microsoft Agent Framework 1.0-compatible migration samples when moving SK agent code to Agent Framework.
 
 ## Kernel Setup
 

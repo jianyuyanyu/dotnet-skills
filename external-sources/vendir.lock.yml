@@ -2,10 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Update lsp.config to invoke dnx from the plugin directory (#607)...
-      sha: 998ae280637d9a0c7f9ae414d853525c4aea069b
-      tags:
-      - skill-validator-nightly-6-g998ae28
+      commitTitle: Resolve Microsoft.AITools.BinlogMcp from nuget.org (#774)
+      sha: 5aa08ce41bf54df51888e225f926087d101dd07b
     path: dotnet-skills
   path: upstreams
 kind: LockConfig

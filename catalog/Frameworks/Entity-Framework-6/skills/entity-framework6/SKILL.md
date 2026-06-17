@@ -45,6 +45,11 @@ compatibility: "Requires EF6 or a transition plan from EF6 to EF Core or modern 
    - verify: `dotnet ef migrations add` succeeds, queries produce equivalent results, lazy loading behavior matches expectations
 5. **Do not promise EF Core features to EF6 codebases** — EF6 is stable and supported but not on the innovation path. Keep expectations realistic.
 
+## Current Upstream Notes
+
+- The current EF Core vs EF6 comparison page keeps the migration decision separate from runtime modernization. EF6 can remain the right ORM when EDMX, ObjectContext, or complex legacy mappings dominate the risk.
+- EF Core `v9.0.17` servicing does not change EF6 guidance by itself; only move an EF6 codebase when the project has a bounded migration slice and database-backed equivalence tests.
+
 ```mermaid
 flowchart LR
   A["Audit EF6 usage"] --> B{"EDMX or complex mappings?"}

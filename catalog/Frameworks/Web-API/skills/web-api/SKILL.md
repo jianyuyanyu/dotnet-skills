@@ -21,6 +21,11 @@ compatibility: "Requires an ASP.NET Core API project that uses or should use con
 5. Keep OpenAPI generation, versioning, and error contract behavior deliberate rather than incidental.
 6. Use `minimal-apis` for new simple APIs instead of defaulting to controllers out of habit.
 
+## Current Upstream Notes
+
+- `dotnet/aspnetcore` `v9.0.17` is servicing. Controller-based API guidance still depends on whether the project needs controller conventions, advanced model binding, OData, JsonPatch, or existing filter conventions.
+- Use the `aspnetcore-10.0` Learn overview for exact current routing, OpenAPI, auth, and hosting links before changing public API contracts.
+
 ## Deliver
 
 - controller APIs with explicit contracts and policies

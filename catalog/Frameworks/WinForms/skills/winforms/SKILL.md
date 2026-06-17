@@ -56,6 +56,11 @@ compatibility: "Requires a Windows Forms project on .NET or .NET Framework."
 6. **Validate with `ErrorProvider`** and the `Validating` event. Call `ValidateChildren()` before save operations.
 7. **Modernize incrementally** — prefer better structure over big-bang rewrites. Use .NET 8+ features (button commands, stock icons) when available.
 
+## Current Upstream Notes
+
+- The refreshed Windows Forms overview remains focused on Windows desktop, designer-driven controls, events, data binding, and migration to modern .NET. Keep WinForms guidance pragmatic: improve form boundaries and designer safety before proposing a framework rewrite.
+- For docs-driven updates, validate whether the app targets .NET Framework, modern .NET, or mixed libraries before changing project format, designer files, or deployment assumptions.
+
 ```mermaid
 flowchart LR
   A["Form event"] --> B["Presenter handles logic"]

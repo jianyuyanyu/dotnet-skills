@@ -1,6 +1,10 @@
 {
   "name": "ManagedCode-Orleans-Graph",
   "title": "ManagedCode Orleans Graph",
-  "description": "",
-  "links": {}
+  "description": "Orleans grain-call policy enforcement, deadlock detection, and Mermaid graph diagnostics for .NET 10 / Orleans 10 systems.",
+  "links": {
+    "repository": "https://github.com/managedcode/Orleans.Graph",
+    "docs": "https://github.com/managedcode/Orleans.Graph#readme",
+    "nuget": "https://www.nuget.org/packages/ManagedCode.Orleans.Graph"
+  }
 }

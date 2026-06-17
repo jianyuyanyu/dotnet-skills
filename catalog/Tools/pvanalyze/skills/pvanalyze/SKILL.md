@@ -33,6 +33,11 @@ Use `dotnet-trace-collect` or `profiling` first when the task is mostly about co
 5. Add `--from` and `--to` only after the baseline command confirms the interesting time window.
 6. Use `pvanalyze clean <trace-or-directory>` when generated `.pvanalyze.etlx` cache files should be removed.
 
+## Current Upstream Notes
+
+- The upstream README still positions `pvanalyze` as a cross-platform `.nettrace` analyzer and explicitly says `--help` plus the README are the intended agent context rather than a separate upstream `SKILL.md` or `AGENTS.md`.
+- Keep this catalog skill focused on practical command selection and trace prerequisites. Do not add pvanalyze as a broad diagnostics replacement for trace collection, counters, dumps, or Microsoft-only tooling.
+
 ## Install
 
 The upstream README documents two install paths:

@@ -173,7 +173,7 @@ All state is stored in `.testagent/` folder:
 2. **Polyglot** — detect the language and use appropriate patterns
 3. **Verify** — each phase must produce compiling, passing tests
 4. **Don't skip** — report failures rather than skipping phases
-5. **Clean git first** — stash pre-existing changes before starting
+5. **Treat the workspace as delivered** — generate tests against the exact working tree you are given. Never run `git checkout`, `git restore`, `git reset`, `git clean`, `git stash`, `git rm`, or `rm`/`del` on tracked files, and never "repair", revert, regenerate, or reconstruct source that looks deleted, gutted, synthetic, or incomplete. An unusual, sparse, or scaffolded repository layout is intentional, not corruption — test what is actually present. If the workspace genuinely contains nothing testable, say so and stop; do not rebuild it.
 6. **Scoped builds during phases, full build at the end** — build specific test projects during implementation for speed; run a full-workspace non-incremental build after all phases to catch cross-project errors
 7. **No environment-dependent tests** — mock all external dependencies; never call external URLs, bind ports, or depend on timing
 8. **Fix assertions, don't skip tests** — when tests fail, read production code and fix the expected value; never `[Ignore]` or `[Skip]`
@@ -181,3 +181,4 @@ All state is stored in `.testagent/` folder:
 10. **Read language extensions first** — always call the `code-testing-extensions` skill and read the relevant extension file before writing any code; it contains critical project registration and build validation steps
 11. **Always validate** — final build, final test, coverage-gap review, and reporting are mandatory for ALL strategies including Direct; never skip final validation
 12. **Preserve existing tests** — never delete or overwrite existing test files; create new files or append to existing ones
+13. **Never mutate version control** — your only outputs are additive test files plus minimal build-manifest edits to register a new test project. Any command that reverts, restores, resets, stashes, or cleans the tree, or deletes tracked files, is out of scope — even when the workspace looks broken or incomplete.

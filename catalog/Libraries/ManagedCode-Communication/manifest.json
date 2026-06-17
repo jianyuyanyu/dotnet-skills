@@ -1,6 +1,10 @@
 {
   "name": "ManagedCode-Communication",
   "title": "ManagedCode Communication",
-  "description": "",
-  "links": {}
+  "description": "Result-pattern, structured error, ASP.NET Core, SignalR, and Orleans integration library for .NET service boundaries.",
+  "links": {
+    "repository": "https://github.com/managedcode/Communication",
+    "docs": "https://github.com/managedcode/Communication#readme",
+    "nuget": "https://www.nuget.org/packages/ManagedCode.Communication"
+  }
 }

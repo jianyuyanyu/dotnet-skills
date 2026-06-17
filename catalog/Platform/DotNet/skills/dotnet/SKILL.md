@@ -41,6 +41,12 @@ compatibility: "Requires a .NET repository, solution, or project tree."
 5. Do not stop at this skill once a narrower match exists. This skill should classify and hand off, not become a generic dumping ground.
 6. After code changes, validate with the repository's actual build, test, and quality workflow instead of generic `.NET` commands.
 
+## Current Upstream Notes
+
+- `.NET 9.0.17` runtime and ASP.NET Core releases are servicing updates. Treat them as patch validation work unless the repo shows a concrete affected area such as WebSocket frame handling, JIT loop cloning, QUIC/MsQuic, or Linux CRL caching.
+- `.NET SDK 8.0.422` belongs to the 8.0.28 servicing train. Use it for repos pinned to .NET 8, but do not infer modern C# or .NET 10 language availability from that SDK line.
+- The refreshed "Build apps with .NET" Learn page remains broad routing context; still hand off to `project-setup`, `worker-services`, `aspnet-core`, `modern-csharp`, or another narrow skill as soon as the app model is known.
+
 ## Routing Heuristics
 
 - If the repo contains `Microsoft.NET.Sdk.Web`, start from a web skill, not generic `.NET`.

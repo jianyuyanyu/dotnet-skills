@@ -43,6 +43,12 @@ compatibility: "Requires a .NET repository with Node-based frontend assets such 
 6. If the repo wants type-aware rules, verify the target files are covered by the intended `tsconfig.json` before enabling heavier rules.
 7. Do not hide noise by mass-disabling rules. Fix code, narrow scope, or phase severity deliberately.
 
+## Current Upstream Notes
+
+- ESLint `v10.5.0` improves rule location reporting for complexity-style rules such as `max-depth`, `max-lines-per-function`, `max-nested-callbacks`, and `max-statements`, and reports `no-with` at the `with` keyword.
+- Rebaseline snapshot tests or lint-output parsers after upgrading because diagnostics may point at more precise locations.
+- Current docs clarify parser option precedence over `languageOptions`; review flat-config migrations that mix legacy parser settings with new config shapes.
+
 ## Bootstrap When Missing
 
 1. Detect current state:

@@ -58,6 +58,11 @@ On Windows, run scripts with `dotnet fsi scripts/check.fsx`.
 4. Run the script with `dotnet fsi` from a clean shell, passing the same arguments the user or CI will use.
 5. Promote the script to an `.fsproj` when it needs tests, distribution, project references, or long-term CI coverage.
 
+## Current Upstream Notes
+
+- The refreshed F# Interactive reference keeps `dotnet fsi` as the supported command-line entry point for interactive sessions and `.fsx` scripts.
+- Use repeatable `.fsx` files with explicit `#r "nuget: ..."` and `#load` directives once an experiment affects a repository task; do not rely on hidden REPL state.
+
 ## Interactive Session Rules
 
 - End REPL submissions with `;;`.

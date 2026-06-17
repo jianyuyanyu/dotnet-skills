@@ -44,6 +44,10 @@ Use this reference when the main question is about running Orleans, wiring provi
 | Decode silo-side errors | [Silo error code monitoring](https://learn.microsoft.com/dotnet/orleans/host/monitoring/silo-error-code-monitoring) | Error-code reference for silo issues |
 | Decode client-side errors | [Client error code monitoring](https://learn.microsoft.com/dotnet/orleans/host/monitoring/client-error-code-monitoring) | Error-code reference for clients |
 
+Orleans 10.2 moved metrics access away from the removed static meter path. When upgrading code that directly referenced Orleans runtime metrics, resolve `OrleansInstruments` from DI and use its `Meter` instead of hardcoded static access.
+
+For `Orleans.Journaling`, JSON Lines is the default format for new writes in 10.2. Existing journals with stored format metadata continue to read correctly; pin `JournaledStateManagerOptions.JournalFormatKey` only when a deployment must keep writing the old binary format.
+
 ## Deployment and Failures
 
 | Need | Official Source | What It Covers |

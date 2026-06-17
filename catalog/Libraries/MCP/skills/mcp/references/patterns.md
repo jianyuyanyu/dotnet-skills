@@ -10,6 +10,7 @@ Use this file when the task needs concrete current patterns from the official MC
 | Typical client or stdio server | `ModelContextProtocol` | `StdioClientTransport`, `WithStdioServerTransport()` |
 | ASP.NET Core server | `ModelContextProtocol.AspNetCore` | `WithHttpTransport()`, `MapMcp()` |
 | Remote client over HTTP | `ModelContextProtocol` or `Core` | `HttpClientTransport` |
+| Enterprise managed authorization | `ModelContextProtocol` plus authentication support | `IdentityAssertionGrantProvider` for ID-JAG flows |
 
 ## Minimal stdio server
 
@@ -78,6 +79,7 @@ Notes:
 - `MapMcp()` serves Streamable HTTP and legacy SSE endpoints.
 - New remote clients should connect to the mapped route directly and prefer Streamable HTTP.
 - Only point SSE clients to `{route}/sse`.
+- In SDK v1.4.0 and later, Streamable HTTP session cleanup must preserve the same authenticated user that opened the session.
 
 ## Stdio client pattern
 
@@ -90,6 +92,7 @@ var transport = new StdioClientTransport(new StdioClientTransportOptions
     Name = "Everything",
     Command = "npx",
     Arguments = ["-y", "@modelcontextprotocol/server-everything"],
+    InheritEnvironmentVariables = false,
 });
 
 await using var client = await McpClient.CreateAsync(transport);
@@ -123,6 +126,10 @@ await using var client = await McpClient.CreateAsync(transport);
 ```
 
 For mixed environments, `HttpTransportMode.AutoDetect` is the default. It tries Streamable HTTP first and falls back to SSE when needed.
+
+## Enterprise managed authorization
+
+Use `IdentityAssertionGrantProvider` only when the deployment needs the Identity Assertion Authorization Grant flow: exchange an enterprise IdP ID token for a JWT authorization grant, then exchange that grant with the MCP authorization server for an MCP access token. Keep this out of ordinary local stdio or simple bearer-token scenarios.
 
 ## Session resumption
 

@@ -53,6 +53,11 @@ compatibility: "Requires a C# or .NET repository; respects explicit `LangVersion
    - `architecture`
 8. After feature-driven refactors, run the repo's .NET quality pass through `dotnet`.
 
+## Current Upstream Notes
+
+- `.NET runtime` `v9.0.17` is servicing. It should not by itself justify language-feature rewrites.
+- `.NET SDK` `v8.0.422` is an 8.0 servicing SDK. Do not use C# 13 or C# 14 syntax in a repo pinned to that line unless the project explicitly configures a compatible newer compiler/toolset.
+
 ## Bootstrap When Missing
 
 If the requested C# feature depends on SDK or language support the repo does not have yet:

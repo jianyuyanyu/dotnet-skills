@@ -1,7 +1,7 @@
 ---
 name: aspire
-description: "Build, upgrade, and operate .NET Aspire 13.3.x application hosts with current CLI, AppHost, ServiceDefaults, integrations, dashboard, testing, and Azure deployment patterns for distributed apps. USE FOR: Aspire.AppHost.Sdk, Aspire.Hosting.*, DistributedApplication.CreateBuilder, WithReference, WaitFor, AddProject, AddRedis, AddPostgres, aspire run, aspire init, aspire. DO NOT USE FOR: unrelated stacks; generic tasks that do not need this specific guidance. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
-compatibility: "Best for current Aspire 13.3.x tooling on .NET 10; use version-aware upgrade guidance for older 8.x or 9.x Aspire solutions."
+description: "Build, upgrade, and operate .NET Aspire 13.4.x application hosts with current CLI, AppHost, ServiceDefaults, integrations, dashboard, testing, MCP, and Azure deployment patterns for distributed apps. USE FOR: Aspire.AppHost.Sdk, Aspire.Hosting.*, DistributedApplication.CreateBuilder, WithReference, WaitFor, AddProject, AddRedis, AddPostgres, aspire run, aspire init, aspire. DO NOT USE FOR: unrelated stacks; generic tasks that do not need this specific guidance. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
+compatibility: "Best for current Aspire 13.4.x tooling on .NET 10; use version-aware upgrade guidance for older 8.x or 9.x Aspire solutions."
 ---
 
 # .NET Aspire
@@ -20,7 +20,7 @@ compatibility: "Best for current Aspire 13.3.x tooling on .NET 10; use version-a
 
 1. Classify the task first: new AppHost creation, existing-solution enlistment, integration wiring, testing and observability, deployment, or version upgrade.
 2. Prefer the current Aspire toolchain. For greenfield or modernized work, use the Aspire CLI and current AppHost SDK instead of writing new guidance around the deprecated legacy workload.
-3. Treat 13.3.x releases as servicing and feature updates for the current CLI-first app model, not a topology rewrite. Keep the Aspire CLI, `Aspire.AppHost.Sdk`, and closely coupled hosting or testing packages on the same line, then rerun the AppHost and deployment checks after `aspire update`.
+3. Treat 13.4.x releases as servicing and feature updates for the current CLI-first app model, not a topology rewrite. Keep the Aspire CLI, `Aspire.AppHost.Sdk`, and closely coupled hosting or testing packages on the same line, then rerun the AppHost and deployment checks after `aspire update`.
 4. Keep the AppHost code-first and topology-focused. Model services, resources, dependencies, endpoints, lifetimes, and parameters there; keep business logic out.
 5. Keep `ServiceDefaults` narrow. It exists for telemetry, health checks, resilience, and service discovery, not shared domain models or general utility code.
 6. Prefer official first-party Aspire integrations when they cover the requirement. Use `CommunityToolkit/Aspire` only when the capability gap is real: unsupported language hosts, extra dev infrastructure, or extension packages the official project does not provide.
@@ -50,7 +50,9 @@ flowchart LR
 
 - AppHost shape: prefer current SDK-style AppHost projects using `Aspire.AppHost.Sdk/<version>` or a file-based AppHost when that repo intentionally uses the single-file model. Recognize both as valid current patterns.
 - CLI entry points: use `aspire new` for starter projects, `aspire init` to add Aspire support to an existing solution or create a single-file AppHost, `aspire add` to add integrations or starter pieces, `aspire run` for local orchestration, `aspire start`/`aspire stop`/`aspire ps` for detached lifecycle management, `aspire describe` for live resource inspection, `aspire doctor` for environment diagnostics, `aspire secret` for user secrets, `aspire docs` for terminal documentation lookup, `aspire agent` for AI agent integration, `aspire deploy` for the current CLI deploy pipeline, `aspire restore` for AppHost and TypeScript resource refresh, and `aspire update` for version-aware upgrades. `aspire publish` still exists for explicit artifact-generation flows and remains preview-sensitive.
-- Patch posture: Aspire `13.2.2` is the current baseline release in the 13.2 line. Treat it as a current CLI and AppHost refresh, not a new topology model; align package versions, rerun `aspire update`, then revalidate local orchestration and the chosen deployment path.
+- Patch posture: Aspire `13.4.4` is the current 13.4 servicing release. Treat it as a reliability and MCP-tooling refresh, not a new topology model; align package versions, rerun `aspire update`, then revalidate local orchestration and the chosen deployment path.
+- MCP and agent tooling: `ExcludeFromMcp()` filtering is now consistently honored by CLI MCP tools such as resource, log, command, and trace listings. Use it deliberately for resources that should not leak into agent context.
+- DCP reliability: 13.4.4 retries DCP requests when the underlying connection drops mid-request. If AppHost resource commands or dashboard-backed CLI calls were flaky, upgrade before adding local retry wrappers.
 - App model wiring: use `WithReference(...)` for dependency and configuration flow, and `WaitFor(...)` for startup ordering. Use `WithExternalHttpEndpoints()` only when the resource truly needs an externally reachable endpoint for the chosen runtime or publish target.
 - ServiceDefaults boundaries: `AddServiceDefaults()` should stay focused on OpenTelemetry, health endpoints, service discovery, `HttpClient` resilience, and related cross-cutting infrastructure.
 - Testing model: prefer Aspire closed-box testing when you need to run the distributed application as a system. Use `DistributedApplicationTestingBuilder` plus a shared fixture for AppHost lifecycle, `App.CreateHttpClient(...)` for resource-bound clients, and a `WebApplicationFactory<TEntryPoint>` wrapper only when the test must resolve DI services or in-process runtime state from the hosted app. For UI flows, initialize Playwright once in the shared fixture, create a fresh browser context per test, and capture failure artifacts.
@@ -67,13 +69,13 @@ flowchart LR
 ## Official Sources
 
 - [Aspire docs home](https://aspire.dev/docs/)
-- [What's new in Aspire 13.3](https://aspire.dev/whats-new/aspire-13-3/)
+- [What's new in Aspire 13.4](https://aspire.dev/whats-new/aspire-13-4/)
 - [AppHost](https://aspire.dev/get-started/app-host/)
 - [Service defaults](https://aspire.dev/fundamentals/service-defaults/)
 - [Integrations overview](https://aspire.dev/integrations/overview/)
 - [Build your first app](https://aspire.dev/get-started/first-app/)
 - [Aspire CLI reference](https://aspire.dev/reference/cli/commands/aspire/)
-- [Aspire 13.3 release](https://github.com/microsoft/aspire/releases/tag/v13.3.0)
+- [Aspire 13.4.4 release](https://github.com/microsoft/aspire/releases/tag/v13.4.4-release)
 - [Testing overview](https://aspire.dev/testing/overview/)
 - [microsoft/aspire](https://github.com/microsoft/aspire)
 - [CommunityToolkit/Aspire](https://github.com/CommunityToolkit/Aspire)

@@ -52,6 +52,12 @@ compatibility: "Requires a WinUI 3, Windows App SDK, or MAUI-on-Windows integrat
 8. **Always set `XamlRoot`** when showing ContentDialog — omitting this causes silent failures.
 9. **Validate on Windows targets** — behavior depends on runtime, packaging model, and Windows version.
 
+## Current Upstream Notes
+
+- Windows App SDK `2.2.0` adds the `Microsoft.Windows.AI.Video.VideoScaler` API, `ApplicationData.GetForUnpackaged()`, new `XamlBindingHelper` value setter overloads, and `Setter.ValueProperty`.
+- For unpackaged apps, prefer `ApplicationData.GetForUnpackaged()` over registry or custom folder conventions when the app needs first-class app data storage.
+- When upgrading to 2.2.0, retest `RenderTargetBitmap`, `ScrollView`, `ThemeSettings`, pointer cancellation, sparse-packaged PRI discovery, and Windows ML startup/shutdown paths if the app uses those surfaces.
+
 ```mermaid
 flowchart LR
   A["Choose WinUI"] --> B["Select packaging model"]

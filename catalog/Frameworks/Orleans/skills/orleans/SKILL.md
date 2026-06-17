@@ -1,7 +1,7 @@
 ---
 name: orleans
 description: "Build or review distributed .NET applications with Orleans grains, silos, persistence, streaming, reminders, placement, transactions, serialization, event sourcing, testing, and cloud-native hosting. USE FOR: Orleans grains, silos, clients, persistence, streams, reminders, placement, serialization, testing, and Aspire hosting. DO NOT USE FOR: unrelated stacks; generic distributed-system advice with no Orleans code or design decision. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
-compatibility: "Prefer current Orleans releases (10.x / 9.x) with `UseOrleans`, typed persistent state, `RegisterGrainTimer`, `[GenerateSerializer]`, modern providers, and production-grade clustering."
+compatibility: "Prefer current Orleans releases (10.2.x / 9.x) with `UseOrleans`, typed persistent state, `RegisterGrainTimer`, `[GenerateSerializer]`, modern providers, and production-grade clustering."
 ---
 
 # Microsoft Orleans
@@ -88,7 +88,13 @@ compatibility: "Prefer current Orleans releases (10.x / 9.x) with `UseOrleans`, 
     - Orleans Dashboard for operational visibility (secure with ASP.NET Core auth)
     - Health checks for cluster readiness
 
-12. **Test the cluster behavior you actually depend on.**
+12. **Apply 10.2 upgrade checks deliberately.**
+   - `Orleans.Journaling` now defaults to JSON Lines for new writes; preserve the old binary format explicitly only when compatibility requires it.
+   - Code that referenced the static Orleans metrics meter should resolve `OrleansInstruments` from DI and use its `Meter`.
+   - Initial silo connectivity is validated before `BecomeActive`, so startup diagnostics should distinguish `Joining` from active workload readiness.
+   - Redis providers that receive a DI-owned `IConnectionMultiplexer` no longer dispose that shared multiplexer on shutdown; keep ownership assumptions explicit.
+
+13. **Test the cluster behavior you actually depend on.**
    - `InProcessTestCluster` for new tests
    - Shared Aspire/AppHost fixtures for real HTTP, SignalR, SSE, or UI flows that must exercise the co-hosted Orleans topology
    - `WebApplicationFactory<TEntryPoint>` layered over a shared AppHost when tests need Host DI services, `IGrainFactory`, or direct grain/runtime access while keeping real infrastructure
@@ -146,6 +152,7 @@ flowchart LR
 - transactional grains are marked `[Reentrant]` and use `PerformRead`/`PerformUpdate`
 - hot grains, global coordinators, and affinity-heavy grains are measured and justified
 - tests cover multi-silo behavior, persistence, and failover-sensitive logic when those behaviors matter
+- Orleans 10.2 upgrade reviews cover journaling format, metrics meter access, client retry behavior, reminder lifecycle, and provider ownership changes
 - Aspire-backed tests reuse one shared AppHost fixture and do not boot the distributed topology inside individual tests
 - co-hosted Host tests do not start a redundant Orleans client unless external-client behavior is the thing under test
 - Host or API test factories resolve connection strings from the AppHost resource graph instead of copied local config

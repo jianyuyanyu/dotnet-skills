@@ -57,6 +57,11 @@ compatibility: "Requires an ASP.NET Core project or solution."
 
 5. **Validate with build, tests, and targeted endpoint checks.**
 
+## Current Upstream Notes
+
+- ASP.NET Core `v9.0.17` is a servicing release with branding and dependency updates rather than a new programming model. Keep existing middleware, hosting, and endpoint guidance intact, then rerun build/tests after package updates.
+- The current Microsoft Learn overview for `aspnetcore-10.0` remains the routing entry point for choosing between Blazor, Minimal APIs, controller APIs, SignalR, and gRPC.
+
 ## Middleware Patterns
 
 ### Correct Order Matters

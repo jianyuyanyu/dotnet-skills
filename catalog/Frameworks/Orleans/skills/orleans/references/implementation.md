@@ -84,6 +84,7 @@ flowchart LR
 | `RuntimeStorageServices` | 6000 | Storage providers initialized |
 | `RuntimeGrainServices` | 8000 | Grain type management, membership joined, grain directory started |
 | `ApplicationServices` | 10000 | Application-layer services initialized |
+| `ValidateInitialConnectivity` | before `BecomeActive` | Orleans 10.2 validates initial peer connectivity while the silo is still `Joining` |
 | `BecomeActive` | `Active - 1` | Silo joins the cluster |
 | `Active` | 20000 | Ready for workload — grains can be activated |
 | `Last` | `int.MaxValue` | Latest possible stage |

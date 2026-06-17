@@ -1,9 +1,12 @@
-# Stylelint 17.8.0 Notes
+# Stylelint 17.13.0 Notes
 
-Use this note when a repo already has Stylelint wired and you need to refresh config or validation behavior after the `17.8.0` release.
+Use this note when a repo already has Stylelint wired and you need to refresh config or validation behavior after the `17.13.0` release. It also preserves the earlier 17.8 notes because those introduced new rule/config surfaces that still matter during upgrades.
 
 ## What changed that matters for repository maintenance
 
+- `17.13.0` fixes `declaration-block-no-duplicate-properties` false negatives for interleaved non-consecutive duplicates when consecutive-duplicate ignores are configured.
+- `17.13.0` fixes `selector-max-type` false positives for nested selectors.
+- `17.13.0` fixes `selector-type-no-unknown` false positives for `install`.
 - `languageOptions.directionality` lets the config declare writing direction explicitly, which matters when a repo uses logical properties or bidirectional UI conventions.
 - `property-layout-mappings` adds a new rule for property-to-layout relationships, so repos with strict layout policy may need to tune or adopt it during upgrade.
 - `relative-selector-nesting-notation` gives repos a rule for nested selector notation, which can surface issues in Sass or nested CSS codebases.
@@ -19,4 +22,5 @@ Use this note when a repo already has Stylelint wired and you need to refresh co
 
 ## Source
 
+- [Stylelint 17.13.0 release notes](https://github.com/stylelint/stylelint/releases/tag/17.13.0)
 - [Stylelint 17.8.0 release notes](https://github.com/stylelint/stylelint/releases/tag/17.8.0)

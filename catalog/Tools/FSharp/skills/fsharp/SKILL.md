@@ -62,6 +62,11 @@ When adding a file, update the `.fsproj` intentionally. Do not assume wildcard o
 4. Review public API shape for .NET interop. Translate F#-specific internal models to DTOs, methods, or `Try*` patterns when C# callers need a stable surface.
 5. Run `dotnet build`, targeted tests, and any relevant `dotnet fsi` probes before returning the final result.
 
+## Current Upstream Notes
+
+- The refreshed F# overview emphasizes functional-first programming on .NET with records, discriminated unions, pattern matching, units of measure, type providers, and interop. Keep F# guidance domain-model oriented rather than translating C# object patterns mechanically.
+- Use `fsi` for exploratory scripts, but move durable code into ordered `.fsproj` files before it becomes production behavior.
+
 ## Practical Patterns
 
 ### Model State With Records And Unions

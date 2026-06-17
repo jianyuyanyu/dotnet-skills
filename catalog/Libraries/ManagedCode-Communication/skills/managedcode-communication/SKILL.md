@@ -12,6 +12,27 @@ compatibility: "Requires a .NET application, service layer, or API boundary that
 - replacing exception-driven result handling with explicit results
 - reviewing service boundaries that return success or failure payloads
 - documenting result-pattern usage across ASP.NET Core or application services
+- mapping application errors to RFC 7807 problem details, Minimal API results, SignalR filters, or Orleans call filters
+
+## Install
+
+Use the package that matches the boundary. Current upstream release reviewed: `v10.0.4`.
+
+```bash
+dotnet add package ManagedCode.Communication
+dotnet add package ManagedCode.Communication.AspNetCore
+dotnet add package ManagedCode.Communication.Extensions
+dotnet add package ManagedCode.Communication.Orleans
+```
+
+For pinned project files:
+
+```xml
+<PackageReference Include="ManagedCode.Communication" Version="10.0.4" />
+<PackageReference Include="ManagedCode.Communication.AspNetCore" Version="10.0.4" />
+<PackageReference Include="ManagedCode.Communication.Extensions" Version="10.0.4" />
+<PackageReference Include="ManagedCode.Communication.Orleans" Version="10.0.4" />
+```
 
 ## Workflow
 
@@ -22,7 +43,11 @@ compatibility: "Requires a .NET application, service layer, or API boundary that
 2. Keep result creation and error mapping explicit instead of mixing exceptions, nulls, and ad-hoc tuples.
 3. Pattern-match result objects at the boundary that converts them into user-facing responses.
 4. Do not hide domain failures behind generic success wrappers.
-5. Validate positive, negative, and error-path handling after integration.
+5. Configure framework integration only where it removes manual translation:
+   - `ConfigureCommunication()` for ASP.NET Core logging and converters
+   - `WithCommunicationResults()` for Minimal API endpoint or group conversion
+   - Orleans or SignalR packages only when those runtime filters are actually in use
+6. Validate positive, negative, and error-path handling after integration.
 
 ```mermaid
 flowchart LR
@@ -31,14 +56,82 @@ flowchart LR
   C --> D["HTTP response or caller-visible contract"]
 ```
 
+## Practical Usage
+
+### Read path with explicit failures
+
+```csharp
+public sealed class OrderService(IOrderRepository orders)
+{
+    public async Task<Result<OrderDto>> GetAsync(Guid id, CancellationToken ct)
+    {
+        var order = await orders.FindAsync(id, ct);
+
+        return order is null
+            ? Result<OrderDto>.FailNotFound($"Order {id} was not found.")
+            : Result<OrderDto>.Succeed(OrderDto.From(order));
+    }
+}
+```
+
+Use this shape when absence, validation, authorization, or domain rejection is an expected outcome. Reserve exceptions for unexpected infrastructure faults.
+
+### Write path through Minimal APIs
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureCommunication();
+
+var app = builder.Build();
+
+app.MapGroup("/orders")
+   .WithCommunicationResults()
+   .MapPost(string.Empty, async (CreateOrder command, OrderService orders, CancellationToken ct) =>
+        await orders.CreateAsync(command, ct));
+```
+
+Handlers can return `Result` or `Result<T>` and let the extension package map failures to HTTP results and problem details at the API boundary.
+
+### Compose validation and domain steps
+
+```csharp
+public async Task<Result<OrderReceipt>> CreateAsync(CreateOrder command, CancellationToken ct)
+{
+    var validation = Validate(command);
+    if (validation.IsFailed)
+    {
+        return Result<OrderReceipt>.Fail(validation.Problem!);
+    }
+
+    return await Result<Order>.From(() => BuildOrder(command))
+        .ThenAsync(order => SaveAsync(order, ct))
+        .Then(order => Result<OrderReceipt>.Succeed(new OrderReceipt(order.Id, order.CreatedAt)));
+}
+```
+
+Use railway-style composition when each step can return a result and the caller should stop at the first real failure.
+
+## Options And Constraints
+
+- `Result`, `Result<T>`, `CollectionResult<T>`, and `Problem` are the core surfaces. Keep them at service/API boundaries rather than leaking framework-specific HTTP results into domain code.
+- `CollectionResult<T>` plus `PaginationRequest` / `PaginationOptions` should own paged API metadata instead of ad-hoc `(items, total)` tuples.
+- Minimal APIs can use `WithCommunicationResults()` on one endpoint or an entire group. Prefer the group form only when every child endpoint follows the same result contract.
+- `ManagedCode.Communication.Orleans` is for grain-call integration and serialization boundaries; use it with the Orleans skill when reviewing grain APIs.
+- `v10.0.4` release notes call out error-handling fixes and dependency maintenance. Re-test negative paths after upgrading.
+
 ## Deliver
 
 - guidance on where explicit result objects improve clarity
 - usage boundaries for translating results into API or caller responses
 - validation expectations for success and failure flows
+- package and integration choices for the actual runtime boundary
 
 ## Validate
 
 - result handling is consistent across the boundary that uses the library
 - callers do not fall back to exception-only logic for normal failure cases
 - negative and error scenarios are documented and tested
+- Minimal API endpoints return expected success and RFC 7807 failure shapes
+- pagination metadata is stable when `CollectionResult<T>` is used
+- Orleans or SignalR integration is covered by runtime-level tests when those packages are installed

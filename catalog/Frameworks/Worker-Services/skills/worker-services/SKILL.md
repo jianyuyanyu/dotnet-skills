@@ -51,6 +51,11 @@ compatibility: "Requires a worker, hosted service, or background-processing scen
    - Expose metrics and structured logging
    - Consider distributed locks for multi-instance
 
+## Current Upstream Notes
+
+- `.NET runtime` `v9.0.17` is servicing. For workers, rerun cancellation, graceful shutdown, WebSocket/HTTP client, and long-running loop checks after upgrading packages rather than changing architecture by default.
+- Use the refreshed Worker Services and hosted-service Learn pages for exact current hosting and health-check APIs when adding new worker entry points.
+
 ## Basic BackgroundService Pattern
 
 ### Simple Worker

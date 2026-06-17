@@ -41,6 +41,13 @@ compatibility: "Requires an MCP-capable .NET agent/app or repo with a browser-de
 5. Validate against the real app, not a mock page.
    - use the app's local dev server, preview URL, or a production-like environment that reflects the bug
 
+## Current Upstream Notes
+
+- Chrome DevTools MCP `v1.2.0` adds memory debugging tools, a `close_heapsnapshot` tool, extension service worker logs, allowed/blocked URL pattern options, multiple third-party developer-tool providers, and experimental TOON structured-content output.
+- Use the memory tools only when heap snapshots are the actual debugging need; close snapshots when finished so the browser session does not keep unnecessary memory pressure.
+- For sensitive or scoped browser automation, prefer `allowedUrlPattern` / `blockedUrlPattern` over relying only on prompt instructions.
+- When enabling category extensions, prompt the user for the category instead of silently broadening the tool surface.
+
 ## Install And Configure
 
 Use the same JSON MCP server block in whatever .NET agent/app host you use:

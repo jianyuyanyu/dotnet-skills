@@ -65,16 +65,17 @@ compatibility: "Requires a .NET repository with stylesheet assets such as `wwwro
 - Massive autofix churn usually means generated assets or third-party CSS slipped into the lint target.
 - Design-system rule noise should be handled by tuning the checked-in config, not by skipping the linter entirely.
 
-## Current 17.8 Guidance
+## Current 17.13 Guidance
 
-- Stylelint `17.8.0` adds `languageOptions.directionality`, `property-layout-mappings`, `relative-selector-nesting-notation`, and `selector-no-deprecated`. Re-run the repo baseline after upgrading so any new selector or layout findings are reviewed instead of preserved by default.
+- Stylelint `17.13.0` is a bug-fix release. It fixes false negatives for non-consecutive duplicate properties when consecutive-duplicate ignores are configured, false positives for `selector-max-type` with nested selectors, and false positives for `selector-type-no-unknown` around `install`.
+- Stylelint `17.8.0` also added `languageOptions.directionality`, `property-layout-mappings`, `relative-selector-nesting-notation`, and `selector-no-deprecated`. Re-run the repo baseline after upgrading so any new selector or layout findings are reviewed instead of preserved by default.
 - Use `languageOptions.directionality` explicitly when the repo styles bidirectional UI or logical properties. That keeps direction-sensitive rules aligned with the intended writing direction rather than inferred behavior.
 - The earlier `*syntax` deprecation under `declaration-property-value-no-unknown` still matters on the 17.x line. If the repo still relies on those options, move the compatibility into `customSyntax` or parser selection instead of extending deprecated rule config.
 - Keep repo ignores focused on generated or vendored assets. Re-check any broad ignore globs after upgrading so they are not masking selector or layout regressions that the new rules now catch.
 
 ## Official Sources
 
-- [Stylelint 17.8.0 release notes](https://github.com/stylelint/stylelint/releases/tag/17.8.0)
+- [Stylelint 17.13.0 release notes](https://github.com/stylelint/stylelint/releases/tag/17.13.0)
 - [references/release-notes.md](references/release-notes.md)
 
 ## Deliver
@@ -116,4 +117,4 @@ compatibility: "Requires a .NET repository with stylesheet assets such as `wwwro
 
 ## References
 
-- [release-notes.md](references/release-notes.md) - Current 17.8.0 release changes that matter for repo config, rule tuning, and selector/layout validation
+- [release-notes.md](references/release-notes.md) - Current 17.13.0 and 17.8.0 release changes that matter for repo config, rule tuning, and selector/layout validation

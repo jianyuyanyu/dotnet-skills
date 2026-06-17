@@ -43,6 +43,12 @@ compatibility: "Requires a .NET repository with frontend assets managed through 
 6. Start migrations with `check` and bounded folders before flipping the whole repo to `--write`.
 7. Re-run the frontend build and tests after broad formatting or lint-fix passes.
 
+## Current Upstream Notes
+
+- The watched Biome release is `@biomejs/js-api@6.0.0`, not a core CLI-only release. It adds `spanInBytesToSpanInCodeUnits` for converting Biome UTF-8 byte spans to JavaScript UTF-16 code unit spans.
+- Use that helper when custom JavaScript tooling slices source text from Biome diagnostics, especially with non-ASCII content. Normal `.NET` repos that only run the Biome CLI usually need no config change for this release.
+- Recent Biome changes also continue expanding CSS/SCSS, HTML accessibility, import sorting, watch mode, and upgrade-command surfaces; verify actual CLI ownership before replacing ESLint or Stylelint.
+
 ## Bootstrap When Missing
 
 1. Detect current state:

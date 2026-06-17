@@ -63,15 +63,16 @@ Use `aspire add` when it improves repeatability, especially for:
 
 ## Servicing patch posture
 
-Aspire `13.2.2` is the current baseline release in the 13.2 line, not a new application model. Treat 13.2.x updates as CLI and AppHost servicing work that should preserve the existing topology and only refine the toolchain surface.
+Aspire `13.4.4` is the current servicing release in the 13.4 line, not a new application model. Treat 13.4.x updates as CLI, AppHost, DCP, and MCP-tooling servicing work that should preserve the existing topology and only refine the toolchain surface.
 
-When you roll a 13.2.x patch:
+When you roll a 13.4.x patch:
 
 1. Keep the Aspire CLI and `Aspire.AppHost.Sdk` on the same patch line.
 2. Update adjacent Aspire packages that move with the AppHost, especially hosting and testing packages.
 3. Run `aspire update` before hand-editing package versions unless the repo intentionally pins them.
 4. Revalidate the AppHost start path, resource graph, dashboard, and any deployment scripts after the patch lands.
-5. Re-check the current CLI commands that changed in 13.2, especially `aspire start`/`aspire stop`/`aspire ps`, `aspire describe`, `aspire docs`, `aspire agent`, and `aspire restore`.
+5. Re-check current CLI and MCP-facing commands, especially `aspire start`/`aspire stop`/`aspire ps`, `aspire describe`, `aspire docs`, `aspire agent`, `aspire restore`, and resource/log/trace MCP tools.
+6. For agent-integrated AppHosts, verify resources marked with `ExcludeFromMcp()` do not appear in MCP resource, log, command, trace, or structured-trace outputs.
 
 Do not re-architect the AppHost just because a servicing release shipped.
 

@@ -76,6 +76,11 @@ Subsequent Requests:
 
 4. **Validate in both environments** (for Auto mode)
 
+## Current Upstream Notes
+
+- Treat `dotnet/aspnetcore` `v9.0.17` as servicing. For new guidance, keep using the `.NET 10` Blazor docs and the imported official Blazor task skills for project creation, component authoring, user input, auth, data, JS interop, and prerendering.
+- When existing apps update servicing packages, recheck render-mode assumptions, SignalR circuit behavior, and any interactive-auto client/server service split.
+
 ## Component Patterns
 
 ### Basic Component

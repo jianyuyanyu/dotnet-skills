@@ -31,8 +31,10 @@
         }
       }
     },
-    "dotnet-aspnet": {
+    "dotnet-aspnetcore": {
       "type": "Frameworks",
+      "package": "Official-DotNet-ASPNetCore",
+      "title": "Official .NET skills: ASP.NET Core",
       "category": "Web",
       "compatibility": "Requires an ASP.NET Core project or solution.",
       "skillOverrides": {

@@ -35,6 +35,11 @@ compatibility: "Requires a WPF project on .NET or .NET Framework."
 5. **Handle threading correctly** — use Dispatcher for UI updates, async/await for long operations
 6. **Validate both designer and runtime** — XAML composition failures often surface only at runtime
 
+## Current Upstream Notes
+
+- The refreshed WPF overview page reiterates WPF as a Windows desktop UI stack with XAML, data binding, styling, templates, resources, and vector/rich-media composition. Keep WPF-specific guidance separate from WinUI or MAUI unless the task is explicitly a migration or comparison.
+- For modernization work, check both `.NET Framework` compatibility constraints and current .NET desktop migration docs before moving project files or XAML resource dictionaries.
+
 ## Project Structure
 
 ```

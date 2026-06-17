@@ -21,6 +21,11 @@ compatibility: "Best for new repositories or structural refactors of existing .N
 5. Prefer project references and composition over circular dependencies or utility dumping grounds.
 6. Document the local build, test, and run path in repo docs or `AGENTS.md` when the workflow is not obvious.
 
+## Current Upstream Notes
+
+- The current "Build apps with .NET" Learn page reinforces app-model-first setup: console, web, worker, desktop, mobile, cloud, and AI entry points should drive SDK/template choice.
+- `.NET SDK 8.0.422` is servicing for the 8.0 line. Keep `global.json` and CI images explicit when a repo needs that line instead of relying on a newer local SDK.
+
 ## Deliver
 
 - a coherent solution structure

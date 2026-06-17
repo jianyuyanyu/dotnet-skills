@@ -1,7 +1,7 @@
 ---
 name: mcp
 description: "Build or consume Model Context Protocol (MCP) servers and clients in .NET using the official MCP C# SDK, including stdio, Streamable HTTP, tools, prompts, resources, and capability negotiation. USE FOR: .NET MCP servers or clients; stdio versus HTTP transport choices; tools, resources, prompts, completions, and capability negotiation. DO NOT USE FOR: unrelated stacks; generic tasks that do not need this specific guidance. INVOKES: inspect the repository context, edit targeted files, and run relevant build, test, lint, or validation commands when changes are made."
-compatibility: "Requires the official MCP C# SDK packages (`ModelContextProtocol.Core`, `ModelContextProtocol`, or `ModelContextProtocol.AspNetCore`) on .NET 8+; current guidance targets the v1.1.x SDK."
+compatibility: "Requires the official MCP C# SDK packages (`ModelContextProtocol.Core`, `ModelContextProtocol`, or `ModelContextProtocol.AspNetCore`) on .NET 8+; current guidance targets the v1.4.x SDK."
 ---
 
 # MCP C# SDK for .NET
@@ -13,7 +13,7 @@ compatibility: "Requires the official MCP C# SDK packages (`ModelContextProtocol
 - exposing tools, resources, prompts, completions, or logging to an MCP host
 - connecting a .NET app to an existing MCP server and passing discovered tools into `IChatClient`
 - bootstrapping a minimal MCP client/server from the `.NET AI` quickstarts or publishing a server to the MCP Registry
-- implementing capability-aware flows such as roots, sampling, elicitation, subscriptions, or session resumption
+- implementing capability-aware flows such as roots, sampling, elicitation, subscriptions, session resumption, or enterprise managed authorization
 
 ## Use This Skill Instead Of
 
@@ -55,6 +55,13 @@ Load only what the task needs:
 | `StdioClientTransport` / `WithStdioServerTransport()` | The MCP server should run as a local child process. | Best for local tooling and editor/agent integrations. |
 | `HttpClientTransport` + `HttpTransportMode.StreamableHttp` | The server is remote or should be reachable over HTTP. | Recommended HTTP transport; supports streaming and session resumption. |
 | `HttpTransportMode.Sse` | You must connect to an older SSE-only server. | Legacy compatibility only; do not choose this for new servers. |
+
+## Current v1.4 Notes
+
+- Enterprise managed authorization now has an SDK surface through `IdentityAssertionGrantProvider` for the Identity Assertion Authorization Grant flow. Use it only when the enterprise SSO and MCP authorization-server contract is part of the actual scenario.
+- `StdioClientTransportOptions.InheritEnvironmentVariables` controls whether child-process MCP servers inherit the parent environment. Set it intentionally when launching untrusted or third-party servers.
+- Streamable HTTP session `DELETE` is hardened to require the same authenticated user that opened the session. Do not build custom session cleanup paths that bypass that authorization check.
+- Stdio transport no longer logs child-process environment variables at trace level, but server authors should still treat environment variables as secrets.
 
 ```mermaid
 flowchart LR
@@ -174,6 +181,7 @@ if (client.ServerCapabilities.Prompts is not null)
    - `MapMcp()` also serves SSE compatibility endpoints for older clients.
    - HTTP clients can use `AutoDetect` by default, or force `StreamableHttp` / `Sse`.
    - Session resumption is available for Streamable HTTP through `McpClient.ResumeSessionAsync(...)`.
+   - For authenticated Streamable HTTP sessions, cleanup and resume operations must preserve the same user boundary.
 
 8. Treat the `.NET AI` MCP quickstarts as bootstrap examples.
    - `build-mcp-client` and `build-mcp-server` are good starting points when the surrounding app is still MEAI-centric.

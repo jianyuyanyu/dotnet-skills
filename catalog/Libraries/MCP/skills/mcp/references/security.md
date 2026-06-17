@@ -26,6 +26,7 @@ Do not:
 - write banner text to stdout
 - print debug tracing with `Console.WriteLine`
 - mix app startup messaging into the MCP pipe
+- inherit parent environment variables into child servers unless the server needs them and the values are safe for that trust boundary
 
 ## Parameter validation
 
@@ -105,6 +106,10 @@ public sealed class DeploymentTools(IDeploymentService deployments)
     }
 }
 ```
+
+For Streamable HTTP, SDK v1.4.0 requires a `DELETE` session cleanup request to come from the same authenticated user that created the session. Preserve that boundary when adding reverse proxies, custom auth middleware, or session-management helpers.
+
+For enterprise SSO, use `IdentityAssertionGrantProvider` only when the Identity Assertion Authorization Grant flow is explicitly part of the deployment. Treat exchanged ID tokens, JWT authorization grants, and MCP access tokens as separate secrets with distinct lifetimes.
 
 ## Capability minimization
 

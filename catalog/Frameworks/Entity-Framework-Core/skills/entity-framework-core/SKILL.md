@@ -35,6 +35,11 @@ compatibility: "Requires EF Core 7+ (preferably 8/9 for latest features)."
 5. **Be deliberate about provider behavior** — cross-provider but not identical
 6. **Validate with query inspection** — not just in-memory mental model
 
+## Current Upstream Notes
+
+- EF Core `v9.0.17` is a servicing release tied to the `.NET 9.0.17` train. Treat it as dependency and regression validation work unless the release notes or provider package changelog call out a concrete affected query/runtime path.
+- The refreshed EF Core vs EF6 comparison page is the first stop for migration decisions. Do not imply EF6-only EDMX/ObjectContext-heavy code should automatically move to EF Core without a feature inventory.
+
 ## DbContext Patterns
 
 ### Basic Configuration
