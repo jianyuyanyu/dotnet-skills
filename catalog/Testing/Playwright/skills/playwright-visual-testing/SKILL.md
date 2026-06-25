@@ -22,7 +22,7 @@ compatibility: "Requires a browser-facing app or static site plus a Node-based P
 
 ## Load References
 
-- Read `references/ci-and-snapshot-patterns.md` when adding a new visual test suite, wiring GitHub Actions, choosing between Playwright snapshots and a standalone Pixelmatch script, or stabilizing screenshot diffs.
+- Read [CI and snapshot patterns](references/ci-and-snapshot-patterns.md) when adding a new visual test suite, wiring GitHub Actions, choosing between Playwright snapshots and a standalone Pixelmatch script, or stabilizing screenshot diffs.
 
 ## Workflow
 

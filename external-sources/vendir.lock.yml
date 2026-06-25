@@ -2,8 +2,11 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Resolve Microsoft.AITools.BinlogMcp from nuget.org (#774)
-      sha: 5aa08ce41bf54df51888e225f926087d101dd07b
+      commitTitle: 'skill-validator: restore 15K aggregate cap as the real Copilot
+        CLI skill-menu budget (#803)...'
+      sha: 592a53008e550aadd46e955f155a31a491b5a6a2
+      tags:
+      - skill-validator-nightly-14-g592a530
     path: dotnet-skills
   path: upstreams
 kind: LockConfig
