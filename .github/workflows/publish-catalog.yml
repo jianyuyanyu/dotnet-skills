@@ -395,5 +395,8 @@ jobs:
           args=(--release --details "Release: $RELEASE_RESULT; Pages build: $BUILD_RESULT; Pages deploy: $DEPLOY_RESULT. See the failed run for the concrete error.")
           if [[ "$RELEASE_RESULT" != success || "$BUILD_RESULT" == failure || "$BUILD_RESULT" == cancelled || "$DEPLOY_RESULT" == failure || "$DEPLOY_RESULT" == cancelled ]]; then
             args+=(--failed)
+          elif [[ "$BUILD_RESULT" != success || "$DEPLOY_RESULT" != success ]]; then
+            # A no-op run does not prove recovery from a previous Pages failure.
+            exit 0
           fi
           python3 scripts/nightly_catalog_pr.py report "${args[@]}"

@@ -27,7 +27,8 @@ flowchart LR
 - [x] Verify local regressions and workflow syntax (41 tests and actionlint).
 - [x] Push directly to main and execute the nightly workflow.
 - [x] Verify automatic PR and merge: PR #1580, Actions run 34874471959.
-- [ ] Verify the release path through a live release run.
+- [x] Verify the release path: Actions run 34875037756 published catalog-v2026.9.14.0,
+  pushed all three NuGet tools as 0.1.223, and deployed GitHub Pages.
 
 ## Evidence
 
@@ -39,3 +40,8 @@ runtime behavior; local passing tests alone do not prove automatic delivery.
 The live refresh run passed watch, both reusable validation jobs, automatic merge
 and baseline promotion. Release failures are reported separately, and the public
 catalog release is finalized only after NuGet publication and asset upload.
+
+A second release run (34875377877) confirmed the unchanged revision is a no-op:
+release packaging, NuGet push and Pages deployment were skipped successfully.
+No-op runs do not close an earlier release failure issue because they do not
+prove that its failed publish or Pages stage has recovered.
