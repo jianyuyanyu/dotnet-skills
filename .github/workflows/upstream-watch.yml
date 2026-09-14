@@ -74,9 +74,9 @@ jobs:
 
       - name: Install vendir
         run: |
-          mkdir -p .tools
-          curl -fsSL https://carvel.dev/install.sh | K14SIO_INSTALL_BIN_DIR="$PWD/.tools" bash
-          echo "$PWD/.tools" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/nightly-tools"
+          curl -fsSL https://carvel.dev/install.sh | K14SIO_INSTALL_BIN_DIR="$RUNNER_TEMP/nightly-tools" bash
+          echo "$RUNNER_TEMP/nightly-tools" >> "$GITHUB_PATH"
 
       - name: Refresh external catalog sources
         run: bash scripts/sync_external_catalog_sources.sh
