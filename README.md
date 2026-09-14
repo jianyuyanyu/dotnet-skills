@@ -308,7 +308,7 @@ When you refresh vendored upstream content locally, use `bash scripts/sync_exter
 
 ## How Updates Are Tracked
 
-The nightly refresh starts at `00:17 UTC` in [upstream-watch.yml](.github/workflows/upstream-watch.yml). It checks configured sources, refreshes vendir imports and pending skills, and creates or updates one catalog PR when content changes. The same PR Checks validate the proposed commit before automatic merge. The `04:00 UTC` release publishes unreleased changes; unchanged nights create no PR or release. Failures remain queued and are reported in one maintenance issue. See [nightly refresh setup](docs/nightly-refresh.md) for the content-updater configuration.
+The nightly refresh starts at `00:17 UTC` in [upstream-watch.yml](.github/workflows/upstream-watch.yml). It checks configured sources, copies the configured upstream skill and agent trees through vendir and the importer, and creates or updates one catalog PR when content changes. The same PR Checks validate the proposed commit before automatic merge. The `04:00 UTC` release publishes unreleased changes; unchanged nights create no PR or release. Failures remain queued and are reported in one maintenance issue. See [nightly refresh setup](docs/nightly-refresh.md) for source configuration and failure handling.
 
 This repository does not guess what to monitor.
 

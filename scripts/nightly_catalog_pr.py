@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
-from pathlib import Path
+import sys
 from typing import Any
 
 from upstream_watch import gh_api
@@ -56,9 +55,7 @@ def find_pr(repo: str, token: str) -> dict | None:
     return prs[0]
 
 
-def publish(repo: str, token: str, report: dict) -> None:
-    if report.get("failed"):
-        raise ValueError("Cannot publish an incomplete skill refresh")
+def publish(repo: str, token: str) -> None:
     paths = candidate_paths()
     pr = find_pr(repo, token)
     # Lock or transport-only changes are not a catalog update.
@@ -163,7 +160,6 @@ def report_status(repo: str, token: str, failed: bool, details: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["publish", "merge", "report"])
-    parser.add_argument("--report", type=Path, default=Path("artifacts/nightly-refresh/report.json"))
     parser.add_argument("--pr", type=int)
     parser.add_argument("--head")
     parser.add_argument("--base")
@@ -172,7 +168,7 @@ def main() -> None:
     args = parser.parse_args()
     repo, token = os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"]
     if args.action == "publish":
-        publish(repo, token, json.loads(args.report.read_text()))
+        publish(repo, token)
     elif args.action == "merge":
         if not args.pr or not args.head or not args.base:
             parser.error("merge requires --pr, --head and --base")
@@ -182,4 +178,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        reason = " ".join(str(exc).split())[:1500]
+        output(error=reason)
+        print(f"Error: {reason}", file=sys.stderr)
+        raise SystemExit(1)

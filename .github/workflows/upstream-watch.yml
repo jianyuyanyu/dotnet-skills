@@ -75,12 +75,6 @@ jobs:
       - name: Refresh external catalog sources
         run: bash scripts/sync_external_catalog_sources.sh
 
-      - name: Refresh pending watched skills
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NIGHTLY_SKILL_REFRESH_COMMAND: ${{ vars.NIGHTLY_SKILL_REFRESH_COMMAND }}
-        run: python3 scripts/nightly_skill_refresh.py
-
       - name: Validate refreshed catalog
         run: |
           python3 scripts/generate_catalog.py --validate-only
@@ -109,6 +103,8 @@ jobs:
       ref: ${{ needs.watch.outputs.head }}
 
   merge:
+    outputs:
+      error: ${{ steps.merge.outputs.error }}
     needs: [watch, validate]
     if: needs.validate.result == 'success'
     runs-on: ubuntu-latest
@@ -118,6 +114,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Merge the verified catalog commit
+        id: merge
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.watch.outputs.pr }}
@@ -160,6 +157,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WATCH_RESULT: ${{ needs.watch.result }}
           VALIDATION_RESULT: ${{ needs.validate.result }}
+          MERGE_ERROR: ${{ needs.merge.outputs.error }}
+          PR_NUMBER: ${{ needs.watch.outputs.pr }}
           MERGE_RESULT: ${{ needs.merge.result }}
           STATE_RESULT: ${{ job.status }}
           CHANGED: ${{ needs.watch.outputs.changed }}
@@ -168,4 +167,4 @@ jobs:
           if [[ "$STATE_RESULT" != success || "$WATCH_RESULT" != success ]] || [[ "$CHANGED" == true && ( "$VALIDATION_RESULT" != success || "$MERGE_RESULT" != success ) ]]; then
             args+=(--failed)
           fi
-          python3 scripts/nightly_catalog_pr.py report "${args[@]}" --details "Refresh: $WATCH_RESULT; validation: $VALIDATION_RESULT; merge: $MERGE_RESULT; state promotion: $STATE_RESULT."
+          python3 scripts/nightly_catalog_pr.py report "${args[@]}" --details "Refresh: $WATCH_RESULT; validation: $VALIDATION_RESULT; merge: $MERGE_RESULT; state promotion: $STATE_RESULT. PR: #$PR_NUMBER. Merge failure: $MERGE_ERROR"

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import nightly_catalog_pr as prs
-import nightly_skill_refresh as refresh
+import upstream_watch as watch
 
 
 class CandidateTests(unittest.TestCase):
@@ -43,6 +43,14 @@ class CandidateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     prs.verify_merge_candidate(candidate, "head", "base", "base")
 
+    @patch.object(prs, "gh_api")
+    def test_github_merge_refusal_is_a_failure_with_reason(self, api):
+        api.side_effect = [self.candidate(), {"object": {"sha": "base"}},
+                           {"merged": False, "message": "Required approval is missing"}]
+        with self.assertRaisesRegex(RuntimeError, "Required approval is missing"):
+            prs.merge("o/r", "token", 4, "head", "base")
+        self.assertEqual(api.call_args.kwargs["data"]["sha"], "head")
+
     def test_state_and_workflow_paths_are_rejected(self):
         for path in [".github/upstream-watch-state.json", ".github/workflows/check.yml", "scripts/a.py", "AGENTS.md"]:
             self.assertFalse(prs.allowed_path(path))
@@ -54,7 +62,7 @@ class CandidateTests(unittest.TestCase):
     @patch.object(prs, "candidate_paths", return_value=["external-sources/vendir.lock.yml"])
     @patch.object(prs, "gh_api")
     def test_transport_only_changes_do_not_create_pr(self, api, paths, find, output):
-        prs.publish("o/r", "token", {})
+        prs.publish("o/r", "token")
         api.assert_not_called()
         output.assert_called_once_with(changed="false")
 
@@ -82,77 +90,20 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(api.call_args.kwargs["data"], {"state": "closed"})
 
 
-class SkillRefreshTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.original = '---\nname: demo\ndescription: Demo\n---\n# Demo\n'
-        (self.root / "SKILL.md").write_text(self.original)
-        (self.root / "manifest.json").write_text(json.dumps({"version": "1.2.3", "category": "Testing"}))
-
-    def test_real_change_bumps_version_once(self):
-        response = {"summary": "Official API changed", "files": {"SKILL.md": self.original + "New usage.\n"}}
-        self.assertTrue(refresh.apply_response(self.root, response))
-        self.assertEqual(json.loads((self.root / "manifest.json").read_text())["version"], "1.2.4")
-        self.assertFalse(refresh.apply_response(self.root, response))
-        self.assertEqual(json.loads((self.root / "manifest.json").read_text())["version"], "1.2.4")
-
-    def test_no_change_keeps_version(self):
-        self.assertFalse(refresh.apply_response(self.root, {"summary": "No relevant API changes", "files": {}}))
-        self.assertEqual(json.loads((self.root / "manifest.json").read_text())["version"], "1.2.3")
-
-    def test_unsafe_paths_are_rejected_before_writing_any_file(self):
-        for name in ["../AGENTS.md", "/tmp/evil.md", "references/../../escape.md", "scripts/update.py", "manifest.json", "references//x.md"]:
-            with self.subTest(name=name), self.assertRaises(ValueError):
-                refresh.apply_response(self.root, {"summary": "test", "files": {"SKILL.md": self.original + "change", name: "bad"}})
-            self.assertEqual((self.root / "SKILL.md").read_text(), self.original)
-
-    def test_symlink_reference_escape_is_rejected(self):
-        (self.root / "references").symlink_to(self.root.parent, target_is_directory=True)
-        with self.assertRaisesRegex(ValueError, "escapes"):
-            refresh.apply_response(self.root, {"summary": "test", "files": {"references/escape.md": "bad"}})
-
-    def test_frontmatter_identity_cannot_change(self):
-        with self.assertRaisesRegex(ValueError, "identity"):
-            refresh.apply_response(self.root, {"summary": "test", "files": {"SKILL.md": self.original.replace("demo", "other")}})
-
-    def test_missing_evidence_is_rejected(self):
-        with self.assertRaises(ValueError):
-            refresh.apply_response(self.root, {"files": {}})
-
-    def test_missing_updater_is_failure_not_success(self):
-        with self.assertRaisesRegex(RuntimeError, "not configured"):
-            refresh.refresh_skill(self.root, {}, [])
-
-    def test_pending_watches_are_deduplicated_and_scope_comes_from_config(self):
-        config = {"watches": [{"id": "release", "skills": ["demo"], "source_url": "https://official.test"}]}
-        tasks = refresh.select_work({"pending_watch_ids": ["release", "release"]}, config)
-        self.assertEqual(list(tasks), ["demo"])
-        self.assertEqual(tasks["demo"]["watches"]["release"]["source_url"], "https://official.test")
-
-    def test_unknown_watch_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "Unknown pending watch"):
-            refresh.select_work({"pending_watch_ids": ["unknown"]}, {"watches": []})
-
-    def test_failed_detection_prevents_refresh(self):
-        with self.assertRaisesRegex(ValueError, "detection failed"):
-            refresh.select_work({"pending_watch_ids": [], "errors": ["fetch failed"]}, {"watches": []})
-
 class WatchAcknowledgementTests(unittest.TestCase):
-    @patch.object(refresh.watch, "gh_api")
+    @patch.object(watch, "gh_api")
     def test_release_hidden_behind_extension_releases_is_found(self, api):
         api.side_effect = [
             [{"tag_name": f"extension-{n}", "published_at": "2026-09-01"} for n in range(100)],
             [{"tag_name": "2.52.0", "published_at": "2026-04-21"}],
         ]
-        result = refresh.watch.fetch_github_release({"id": "worker", "owner": "Azure", "repo": "worker", "match_tag_regex": r"^\d+\.\d+\.\d+$"}, None)
+        result = watch.fetch_github_release({"id": "worker", "owner": "Azure", "repo": "worker", "match_tag_regex": r"^\d+\.\d+\.\d+$"}, None)
         self.assertEqual(result["value"], "2.52.0")
         self.assertEqual(api.call_count, 2)
         self.assertIn("page=2", api.call_args.args[0])
 
     def test_detected_changes_never_write_github_issues(self):
-        w = refresh.watch
+        w = watch
         config = {"watches": [{"id": "release", "skills": ["demo"]}]}
         with patch.object(w, "fetch_snapshot", return_value={"value": "v2"}), patch.object(w, "gh_api") as api:
             first = w.detect_changes(config, {"watches": {"release": {"value": "v1"}}}, "token")
@@ -167,7 +118,7 @@ class WatchAcknowledgementTests(unittest.TestCase):
         from argparse import Namespace
         from contextlib import ExitStack, redirect_stdout
         from io import StringIO
-        w = refresh.watch
+        w = watch
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
             baseline = root / "baseline.json"
@@ -199,25 +150,19 @@ class PublishTests(unittest.TestCase):
                    ("show", "-s", "--format=%ae", "previous"): prs.BOT_EMAIL,
                    ("rev-parse", "previous^{tree}"): "tree", ("rev-parse", "previous^"): "base"}
         git.side_effect = lambda *args: answers.get(args, "")
-        prs.publish("o/r", "token", {})
+        prs.publish("o/r", "token")
         self.assertFalse(any(call.args[0] == "push" for call in git.call_args_list))
         self.assertEqual(api.call_count, 1)
         self.assertEqual(api.call_args.kwargs["method"], "PATCH")
         self.assertNotIn("Closes #", api.call_args.kwargs["data"]["body"])
         output.assert_called_once_with(changed="true", head="previous", base="base", pr="9")
 
-    @patch.object(prs, "candidate_paths")
-    def test_failed_batch_cannot_publish(self, paths):
-        with self.assertRaisesRegex(ValueError, "incomplete"):
-            prs.publish("o/r", "token", {"failed": True})
-        paths.assert_not_called()
-
     @patch.object(prs, "output")
     @patch.object(prs, "candidate_paths", return_value=[])
     @patch.object(prs, "find_pr", return_value=None)
     @patch.object(prs, "gh_api")
     def test_reviewed_noop_has_no_issue_writes(self, api, find, paths, output):
-        prs.publish("o/r", "token", {})
+        prs.publish("o/r", "token")
         api.assert_not_called()
         output.assert_called_once_with(changed="false")
 

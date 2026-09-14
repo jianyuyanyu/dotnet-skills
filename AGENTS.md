@@ -511,6 +511,8 @@ For GitHub automation:
 
 The upstream automation exists so the skill catalog stays current without requiring manual ecosystem monitoring.
 
+- Nightly skill refresh is deterministic source synchronization: fetch configured upstream repositories and copy their known skill/agent trees through vendir and the importer. Do not add LLM rewriting, AI-provider credentials, or model-selection gates to this workflow. Release and documentation watches are change signals, not instructions to generate replacement skill text.
+
 - Run the complete upstream refresh every night before the 04:00 UTC release: check all configured watches, refresh affected skills and vendir imports, create or update a pull request only for real catalog changes, validate the exact proposed commit, and merge automatically only after successful checks.
 - Report refresh or validation failures in a deduplicated GitHub issue with a link to the failed run. Leave unresolved upstream work pending for retry; never mark a failed refresh as handled. Create issues only when automation fails or something breaks, never merely because upstream changed.
 - Keep unchanged nights quiet: watch-state changes alone must not create a catalog PR or release.
@@ -574,7 +576,7 @@ When adding a documentation watch:
 - Prefer official Microsoft Learn URLs that define platform or framework guidance.
 - Upstream changes go directly to the nightly refresh and catalog PR; do not create or rotate upstream-update issues.
 - Keep the last successfully applied watch baseline outside `main`. Advance it only after a verified merge or a successful no-change review, so failed work is detected again next night.
-- Create or update one failure issue only when detection, refresh, validation, or merge fails. Failure-issue discovery must paginate; close the failure issue after recovery.
+- Create or update one failure issue only when detection, refresh, validation, or merge fails. If automatic merging is refused or cannot complete, notify the user through that issue with the concrete reason and run/PR links. Failure-issue discovery must paginate; close the failure issue after recovery.
 - Machine-maintained state alone must never create a catalog PR or release.
 
 ## State File Rules

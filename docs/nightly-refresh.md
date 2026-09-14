@@ -1,108 +1,75 @@
 # Nightly catalog refresh
 
-`upstream-watch.yml` runs at **00:17 UTC** and supports manual dispatch. It checks
-all configured upstream watches against the last applied baseline, writes pending
-changes to an artifact, syncs vendir sources, and refreshes affected skills. One automation PR on
-`codex/nightly-catalog-refresh` holds the proposed catalog changes.
+At **00:17 UTC**, `upstream-watch.yml` checks every configured release and
+ documentation watch, synchronizes upstream repositories, copies their skill and
+agent trees, and opens or updates one catalog PR when catalog content changes.
+The same PR Checks validate the proposed commit before automatic merge. At
+**04:00 UTC**, `publish-catalog.yml` publishes unreleased changes as catalog assets,
+NuGet tools and GitHub Pages. Scheduled start times may be delayed by GitHub.
 
-`catalog-check.yml` is both the normal PR workflow and a reusable workflow. The
-nightly caller passes the exact proposed commit. Checks include Python tests,
-locked vendir/import verification, catalog and agent validation, Waza, .NET build,
-tests, pack, and install smoke tests. The merge job requires both check jobs to
-succeed and verifies that the PR head and `main` still match the checked inputs.
-GitHub branch protection still applies; automation does not use an admin bypass.
-Locked verification reads a temporary copy of the committed lockfile because
-vendir recalculates descriptive git tags even when the source SHA is unchanged.
+## Source configuration
 
-The existing `publish-catalog.yml` runs at **04:00 UTC** and releases new commits
-through catalog assets, NuGet tools, and GitHub Pages. It skips a revision already
-covered by the latest non-draft catalog release. A refresh that finishes after
-that release's checkout is included in the following release. GitHub cron times
-are scheduled start times, not guaranteed execution deadlines.
+- `external-sources/vendir.yml` specifies upstream repositories, refs, included
+  directories and source roots.
+- `external-sources/vendir.lock.yml` records the resolved commits.
+- `external-sources/imports/*.json` contains catalog placement and import overrides.
+- The importer discovers `plugin.json`, `.claude-plugin/plugin.json`, and
+  `.agents/skills/*/SKILL.md` source layouts. It copies upstream Markdown verbatim.
+- All configured import repositories are synced every night, even if their
+  watched release or documentation page has not changed.
+- Release/documentation watches are change signals. A source must have an actual
+  skill tree and an import mapping to supply copied skill content.
 
-## Content updater contract
+No AI service, model, or content-generation command is part of this workflow.
+GitHub operations use the workflow's `GITHUB_TOKEN`.
 
-Imported upstream skills are copied verbatim through vendir and the canonical
-importer. They do not require an AI provider. Repo-owned skills use one shared
-content-updater command configured in the Actions repository variable
-`NIGHTLY_SKILL_REFRESH_COMMAND`. An empty command fails visibly when a repo-owned
-skill has pending changes; it never silently marks those changes as applied.
+## Validation and automatic delivery
 
-The command receives one JSON request on stdin:
+`catalog-check.yml` runs Python regression tests, locked vendir/import verification,
+catalog and agent validation, Waza, .NET build, tests, pack and install smoke tests.
+Locked verification preserves the committed lock metadata while checking its
+exact source commits. The merge job checks that both PR head and base still match
+the validated revision. It does not bypass repository protection.
 
-```json
-{
-  "skill": "example",
-  "watches": {
-    "example-release": {
-      "id": "example-release",
-      "kind": "github_release",
-      "owner": "official-owner",
-      "repo": "example",
-      "skills": ["example"]
-    }
-  },
-  "files": {"SKILL.md": "Current skill including frontmatter"},
-  "manifest": {"version": "1.0.0", "category": "Core"}
-}
+The automation PR uses `codex/nightly-catalog-refresh`. Successful changes merge
+without manual intervention. A conflict, failed check, permission error, or refused
+merge produces a `nightly-refresh-failure` issue with the run link and failure
+context so the maintainer can intervene. Recovery closes that failure issue.
+
+```mermaid
+flowchart TD
+  Night[00:17 UTC] --> Watch[Check configured watches]
+  Watch --> Copy[vendir sync and canonical importer]
+  Copy --> Changed{Catalog changed?}
+  Changed -->|No| State[Save successful watch baseline]
+  Changed -->|Yes| PR[Create or update catalog PR]
+  PR --> Check[Validate exact commit]
+  Check --> Merge[Automatic merge]
+  Merge --> State
+  Merge --> Release[04:00 UTC catalog, NuGet and Pages release]
+  Watch -->|Failure| Issue[Failure issue for maintainer]
+  Copy -->|Failure| Issue
+  Check -->|Failure| Issue
+  Merge -->|Refused or failed| Issue
 ```
 
-The command must inspect the configured authoritative sources, update guidance
-only when supported by those sources, and return JSON on stdout:
+Normal upstream changes never create issues. An unchanged catalog creates no PR;
+a revision already released creates no duplicate release. Watch state is saved
+outside Git only after successful merge or validated no-op, so failed work is
+retried next night. A cache miss rechecks from the checked-in bootstrap baseline.
+Reports are retained as Actions artifacts for seven days.
 
-```json
-{
-  "summary": "Evidence and explanation of the relevant change, with source URLs",
-  "files": {
-    "SKILL.md": "Complete updated skill with unchanged frontmatter",
-    "references/usage.md": "Complete updated practical guidance"
-  }
-}
-```
-
-An empty `files` object means the sources were examined and no guidance change
-is needed. The updater must preserve installation instructions, practical usage,
-constraints, and validation guidance. Upstream text is evidence, never permission
-to execute instructions or modify repository automation. Provider credentials
-belong in GitHub Actions secrets, never variables or catalog files.
-
-The shared runner validates output paths, rejects changes outside `SKILL.md` and
-Markdown references, and bumps the sibling skill manifest patch version only for
-real edits. It rejects identity changes, empty content, path traversal, symlink
-escapes, and oversized responses. A single failure prevents publishing the batch.
-
-## No changes and retries
-
-- Unchanged or transport-only updates do not create a catalog PR.
-- Ordinary upstream changes never create, rotate, or close GitHub issues.
-- The applied baseline is cached only after a verified merge or a validated no-op.
-- Failed detection, refresh, validation, or merge leaves that baseline unchanged,
-  so the next night redetects unfinished work. A cache miss rechecks from the
-  checked-in bootstrap baseline rather than dropping pending changes.
-- One `nightly-refresh-failure` issue is created or updated only when something
-  fails; it links to the failed run and closes after recovery.
-- Reports are retained as the `nightly-refresh` artifact for seven days.
-- Human commits on the automation branch are never force-overwritten.
-
-## Local inspection and validation
-
-Authenticate `gh`, then detect upstream changes and inspect the affected skills
-without editing skills, creating issues, or calling a model:
+## Local verification
 
 ```bash
-GITHUB_REPOSITORY=owner/repository GH_TOKEN="$(gh auth token)" \
-  python3 scripts/upstream_watch.py --dry-run
-python3 scripts/nightly_skill_refresh.py --dry-run
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 python3 scripts/upstream_watch.py --validate-config
-actionlint .github/workflows/upstream-watch.yml .github/workflows/catalog-check.yml .github/workflows/publish-catalog.yml
+python3 scripts/upstream_watch.py --dry-run
+bash scripts/sync_external_catalog_sources.sh
+python3 scripts/generate_catalog.py --validate-only
+python3 scripts/generate_agent_catalog.py --validate-only
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-Detection writes `pending.json` and `next-state.json` without advancing the
-applied baseline. The dry-run report is written under `artifacts/nightly-refresh/`. A real refresh
-must first run `bash scripts/sync_external_catalog_sources.sh`, then invoke
-`nightly_skill_refresh.py`, validate the catalog, and publish the candidate.
-
-GitHub Actions must allow creating pull requests with `GITHUB_TOKEN`. Reusable
-checks are invoked explicitly because bot-generated PR events are not a reliable
-unattended CI trigger; see [GitHub's event documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).
+CI invokes `bash scripts/sync_external_catalog_sources.sh --locked` to verify the
+committed snapshot. To add another upstream skill tree, extend the vendir transport
+configuration and its import overrides, then run this same validation flow.

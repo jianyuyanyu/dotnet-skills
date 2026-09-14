@@ -392,13 +392,13 @@ Keep it simple:
 
 ### What Happens After I Add A Watch?
 
-The nightly runner compares sources with the last successfully applied baseline.
-Changed sources go directly to a refresh artifact and PR; issues are only for failures. Configure the
-content updater using [nightly refresh setup](docs/nightly-refresh.md). Imported
-skills use vendir; repo-owned skills require an updater that reads authoritative
-sources and returns scoped Markdown changes. Missing updater configuration is a
-reported failure, never a successful refresh. CI uses `vendir sync --locked` so
-checks validate the committed snapshot instead of advancing upstream again.
+The nightly runner compares watched sources with the last successful baseline
+and synchronizes the repositories configured in `external-sources/vendir.yml`.
+The importer discovers and copies their skill and agent trees using
+`external-sources/imports/*.json` overrides. See [nightly refresh setup](docs/nightly-refresh.md).
+Ordinary updates go directly to a validated PR and automatic merge. Only failures,
+including a refused automatic merge, create an issue. CI uses locked references
+so verification does not advance the upstream snapshot again.
 
 ```mermaid
 flowchart LR
