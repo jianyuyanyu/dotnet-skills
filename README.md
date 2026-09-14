@@ -314,7 +314,7 @@ This repository does not guess what to monitor.
 
 It watches only the sources explicitly listed in the upstream watch config surface:
 
-- [`.github/upstream-watch.json`](.github/upstream-watch.json) for shared metadata such as labels
+- [`.github/upstream-watch.json`](.github/upstream-watch.json) for base watch definitions
 - [`.github/upstream-watch*.json`](.github/) for shard files such as `upstream-watch.ai.json` or `upstream-watch-agent-framework.json`
 
 Those files are the human-maintained source of truth for:
@@ -322,7 +322,7 @@ Those files are the human-maintained source of truth for:
 - GitHub release streams that should trigger skill review
 - documentation pages that should trigger skill review
 - which skills are affected by each upstream change
-- how multiple page-level watches roll up into one open upstream issue per library or skill group
+- how multiple changed sources map to the same skill refresh
 
 Each named shard file has exactly two lists:
 
@@ -337,7 +337,7 @@ flowchart LR
   B --> C["Run dry-run and sync-state-only once"]
   C --> D["00:17 UTC upstream-watch.yml checks configured sources"]
   D --> E["GitHub release or documentation change is detected"]
-  E --> F["Automation opens or updates one grouped upstream issue per library or skill set"]
+  E --> F["Changed sources are written to a pending refresh artifact"]
   F --> G["Nightly runner refreshes affected skills and vendir imports"]
   G --> H["Catalog PR passes reusable checks and merges automatically"]
   H --> I["04:00 UTC release pipeline publishes catalog, site, and tool"]
@@ -345,18 +345,6 @@ flowchart LR
 
 Use this shape:
 
-```json
-{
-  "watch_issue_label": "upstream-update",
-  "labels": [
-    {
-      "name": "upstream-update",
-      "color": "5319E7",
-      "description": "Framework or documentation updates detected by automation"
-    }
-  ]
-}
-```
 
 ```json
 {

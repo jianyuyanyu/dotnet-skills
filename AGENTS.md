@@ -243,7 +243,7 @@ Other important repository files:
 - [`external-sources/vendir.lock.yml`](external-sources/vendir.lock.yml): resolved vendir lock file with pinned upstream SHAs.
 - [`.github/workflows/catalog-check.yml`](.github/workflows/catalog-check.yml): pull-request validation workflow for generated catalog outputs and tool smoke checks.
 - [`.github/workflows/publish-catalog.yml`](.github/workflows/publish-catalog.yml): unified 04:00 UTC release workflow for `catalog-v*` assets, NuGet tool publish, and GitHub Pages deployment.
-- [`.github/upstream-watch.json`](.github/upstream-watch.json): base upstream watch metadata file for labels and shared defaults.
+- [`.github/upstream-watch.json`](.github/upstream-watch.json): base upstream watch configuration.
 - [`.github/upstream-watch*.json`](.github/): optional upstream watch config shards that hold the human-maintained `github_releases` and `documentation` lists.
 - [`.github/upstream-watch-state.json`](.github/upstream-watch-state.json): machine-maintained baseline state.
 - [`.github/workflows/upstream-watch.yml`](.github/workflows/upstream-watch.yml): scheduled workflow.
@@ -511,12 +511,12 @@ For GitHub automation:
 The upstream automation exists so the skill catalog stays current without requiring manual ecosystem monitoring.
 
 - Run the complete upstream refresh every night before the 04:00 UTC release: check all configured watches, refresh affected skills and vendir imports, create or update a pull request only for real catalog changes, validate the exact proposed commit, and merge automatically only after successful checks.
-- Report refresh or validation failures in a deduplicated GitHub issue with a link to the failed run. Leave unresolved upstream work pending for retry; never mark a failed refresh as handled.
+- Report refresh or validation failures in a deduplicated GitHub issue with a link to the failed run. Leave unresolved upstream work pending for retry; never mark a failed refresh as handled. Create issues only when automation fails or something breaks, never merely because upstream changed.
 - Keep unchanged nights quiet: watch-state changes alone must not create a catalog PR or release.
 
 Human-maintained upstream watch configuration lives in a small base file plus optional shard files in the same `.github/` folder:
 
-- [`.github/upstream-watch.json`](.github/upstream-watch.json) for shared metadata such as `watch_issue_label` and `labels`
+- [`.github/upstream-watch.json`](.github/upstream-watch.json) for base watch definitions
 - [`.github/upstream-watch*.json`](.github/) for shard files such as `upstream-watch.ai.json`, `upstream-watch.data.json`, or `upstream-watch-agent-framework.json`
 
 Keep the layout obvious.
@@ -553,7 +553,7 @@ Sharding rules:
 - Keep shard names semantic and review-friendly
 - Do not create numbered fragments such as `10/20/30`
 - Do not introduce `.d` directory indirection for this config
-- Keep `watch_issue_label` and `labels` in the base `upstream-watch.json` file unless there is a strong reason not to
+- Keep watch definitions in the base file or semantic shards; issue labels are owned by failure reporting, not upstream sources.
 
 Supported kinds:
 
@@ -571,12 +571,10 @@ When adding a documentation watch:
 
 - Watch stable, meaningful overview pages, not random transient pages.
 - Prefer official Microsoft Learn URLs that define platform or framework guidance.
-- Keep issue fan-out reviewable. Upstream-watch automation must track one open maintenance issue per library or skill group, not one permanently open issue per individual documentation page when those pages roll up to the same library refresh.
-- When another upstream change arrives for a library or skill group that already has an open upstream-watch issue, carry the pending watch context forward into the replacement issue so the new issue starts with the full current upstream state.
-- Upstream-watch issue discovery must paginate across the full matching issue set before deciding whether an issue already exists. Do not assume the first page of GitHub issues is sufficient for deduplication or repair.
-- Upstream-watch issues are the durable refresh queue for nightly automation; machine-maintained watch state alone must not create `catalog-v*` releases or other user-facing release noise.
-- Do not commit routine upstream-watch state refreshes to `main`. Persist automation state in a non-release-triggering channel so scheduled watch runs can open or rotate issues without manufacturing empty catalog releases.
-- When a new upstream event arrives for a library or skill group that already has an open upstream-watch issue, create a fresh issue for the new event and close the older open issue as superseded by the newer one.
+- Upstream changes go directly to the nightly refresh and catalog PR; do not create or rotate upstream-update issues.
+- Keep the last successfully applied watch baseline outside `main`. Advance it only after a verified merge or a successful no-change review, so failed work is detected again next night.
+- Create or update one failure issue only when detection, refresh, validation, or merge fails. Failure-issue discovery must paginate; close the failure issue after recovery.
+- Machine-maintained state alone must never create a catalog PR or release.
 
 ## State File Rules
 

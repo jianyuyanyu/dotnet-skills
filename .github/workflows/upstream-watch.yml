@@ -44,9 +44,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.UPSTREAM_WATCH_STATE_FILE }}
-          key: upstream-watch-state-${{ github.repository_id }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: nightly-applied-state-${{ github.repository_id }}-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            upstream-watch-state-${{ github.repository_id }}-${{ github.ref_name }}-
+            nightly-applied-state-${{ github.repository_id }}-${{ github.ref_name }}-
 
       - name: Seed upstream watch state
         run: |
@@ -66,12 +66,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/upstream_watch.py --state "${{ env.UPSTREAM_WATCH_STATE_FILE }}"
 
-      - name: Save upstream watch state cache
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.UPSTREAM_WATCH_STATE_FILE }}
-          key: upstream-watch-state-${{ github.repository_id }}-${{ github.ref_name }}-${{ github.run_id }}
-
       - name: Install vendir
         run: |
           mkdir -p "$RUNNER_TEMP/nightly-tools"
@@ -85,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NIGHTLY_SKILL_REFRESH_COMMAND: ${{ vars.NIGHTLY_SKILL_REFRESH_COMMAND }}
-        run: python3 scripts/nightly_skill_refresh.py --state "${{ env.UPSTREAM_WATCH_STATE_FILE }}"
+        run: python3 scripts/nightly_skill_refresh.py
 
       - name: Validate refreshed catalog
         run: |
@@ -140,16 +134,38 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Download successfully applied watch state
+        if: needs.watch.result == 'success' && (needs.watch.outputs.changed != 'true' || needs.merge.result == 'success')
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-refresh
+          path: artifacts/nightly-refresh
+
+      - name: Promote successfully applied watch state
+        if: needs.watch.result == 'success' && (needs.watch.outputs.changed != 'true' || needs.merge.result == 'success')
+        run: |
+          mkdir -p "$(dirname "$UPSTREAM_WATCH_STATE_FILE")"
+          cp artifacts/nightly-refresh/next-state.json "$UPSTREAM_WATCH_STATE_FILE"
+
+      - name: Save successfully applied watch state
+        if: needs.watch.result == 'success' && (needs.watch.outputs.changed != 'true' || needs.merge.result == 'success')
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.UPSTREAM_WATCH_STATE_FILE }}
+          key: nightly-applied-state-${{ github.repository_id }}-${{ github.ref_name }}-${{ github.run_id }}
+
       - name: Report failure or close recovered failure issue
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           WATCH_RESULT: ${{ needs.watch.result }}
           VALIDATION_RESULT: ${{ needs.validate.result }}
           MERGE_RESULT: ${{ needs.merge.result }}
+          STATE_RESULT: ${{ job.status }}
           CHANGED: ${{ needs.watch.outputs.changed }}
         run: |
           args=()
-          if [[ "$WATCH_RESULT" != success ]] || [[ "$CHANGED" == true && ( "$VALIDATION_RESULT" != success || "$MERGE_RESULT" != success ) ]]; then
+          if [[ "$STATE_RESULT" != success || "$WATCH_RESULT" != success ]] || [[ "$CHANGED" == true && ( "$VALIDATION_RESULT" != success || "$MERGE_RESULT" != success ) ]]; then
             args+=(--failed)
           fi
-          python3 scripts/nightly_catalog_pr.py report "${args[@]}" --details "Refresh: $WATCH_RESULT; validation: $VALIDATION_RESULT; merge: $MERGE_RESULT."
+          python3 scripts/nightly_catalog_pr.py report "${args[@]}" --details "Refresh: $WATCH_RESULT; validation: $VALIDATION_RESULT; merge: $MERGE_RESULT; state promotion: $STATE_RESULT."

@@ -2,8 +2,8 @@
 
 ## Contract
 
-Run upstream monitoring and catalog refresh at 00:17 UTC. Keep grouped upstream
-issues as the durable retry queue. Import external skills verbatim; refresh
+Run upstream monitoring and catalog refresh at 00:17 UTC. Keep the last successfully
+applied watch baseline outside Git; issues are only for failures. Import external skills verbatim; refresh
 repo-owned guidance only from configured authoritative sources. Create one
 automation PR for real catalog changes. Validate its immutable head through the
 same catalog, Waza, build, test, pack, and smoke checks as normal PRs. Merge only
@@ -12,7 +12,7 @@ unreleased commits; an unchanged night produces neither a PR nor a release.
 
 ```mermaid
 flowchart TD
-  Watch[00:17 UTC upstream watch] --> Queue[Grouped pending issues]
+  Watch[00:17 UTC upstream watch] --> Queue[Pending changes artifact]
   Queue --> Refresh[Refresh affected skills and vendir imports]
   Refresh --> Changed{Catalog changed?}
   Changed -->|No| Quiet[No PR or release]
@@ -34,15 +34,14 @@ flowchart TD
 - [x] Document updater contract, no-op behavior, retries and release ordering.
 - [ ] Document and wire the selected provider credential.
 - [x] Run regression tests, catalog/watch validation, workflow lint and live dry run.
-  Live validation fetched all 204 watched sources successfully. The queue dry run
-  resolves 130 skills. Remote tool build/test/pack/smoke passed; locked vendir
-  metadata preservation is undergoing a follow-up CI run.
+  Live source validation and remote PR Checks passed before the failure-only
+  issue correction; regression tests and CI are rerun for the revised flow.
 - [x] Commit and push draft PR #1573.
 - [ ] Verify final GitHub checks and a live nightly run after provider setup.
 
 ## Validation matrix
 
-Regression tests cover no changes, state-only changes, repeated pending issues,
+Regression tests cover no changes, state-only changes, repeated pending changes,
 imported ownership, unknown skills, refresh failure, unsafe output paths, PR reuse,
 changed PR head/base and deduplicated failure reporting. Check workflow syntax with
 actionlint. Run Python regression tests and source validators. Run real PR Checks
@@ -53,7 +52,7 @@ selected provider credential; never report mocked output as a live AI refresh.
 
 Use one shared runner instead of copying the same updater into every skill.
 Skill-specific behavior, when necessary, belongs alongside that skill. Existing
-watch mappings select affected skills. Watch cache is observation state; open
-issues are unfinished work, so advancing the cache cannot lose failed refreshes.
+watch mappings select affected skills. The applied baseline advances only after
+success, so failed refreshes are detected again without an issue-based queue.
 Bot PRs explicitly invoke reusable checks instead of relying on recursive
 `GITHUB_TOKEN` events to start CI.

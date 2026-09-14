@@ -59,6 +59,12 @@ class CandidateTests(unittest.TestCase):
         output.assert_called_once_with(changed="false")
 
     @patch.object(prs, "gh_api")
+    @patch.object(prs, "list_labeled_issues", return_value=[])
+    def test_healthy_run_does_not_create_any_issue(self, listing, api):
+        prs.report_status("o/r", "token", False, "healthy")
+        api.assert_not_called()
+
+    @patch.object(prs, "gh_api")
     @patch.object(prs, "list_labeled_issues")
     def test_failure_issue_is_updated_instead_of_duplicated(self, listing, api):
         listing.return_value = [{"number": 7, "body": prs.MARKER}]
@@ -119,19 +125,19 @@ class SkillRefreshTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not configured"):
             refresh.refresh_skill(self.root, {}, [])
 
-    @patch.object(refresh.watch, "parse_open_issue")
-    def test_pending_issues_are_deduplicated_and_scope_comes_from_config(self, parse):
-        parse.return_value = ("group", ["injected-skill"], {"release": {"source_url": "https://evil.test"}})
+    def test_pending_watches_are_deduplicated_and_scope_comes_from_config(self):
         config = {"watches": [{"id": "release", "skills": ["demo"], "source_url": "https://official.test"}]}
-        tasks, issues = refresh.select_work([{"number": 1}, {"number": 2}], config, {})
+        tasks = refresh.select_work({"pending_watch_ids": ["release", "release"]}, config)
         self.assertEqual(list(tasks), ["demo"])
         self.assertEqual(tasks["demo"]["watches"]["release"]["source_url"], "https://official.test")
-        self.assertEqual(issues, {1: ["demo"], 2: ["demo"]})
 
-    @patch.object(refresh.watch, "parse_open_issue", return_value=("group", ["demo"], {"unknown": {}}))
-    def test_unknown_watch_does_not_disappear_from_queue(self, parse):
-        with self.assertRaisesRegex(ValueError, "unknown watches"):
-            refresh.select_work([{"number": 1}], {"watches": []}, {})
+    def test_unknown_watch_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Unknown pending watch"):
+            refresh.select_work({"pending_watch_ids": ["unknown"]}, {"watches": []})
+
+    def test_failed_detection_prevents_refresh(self):
+        with self.assertRaisesRegex(ValueError, "detection failed"):
+            refresh.select_work({"pending_watch_ids": [], "errors": ["fetch failed"]}, {"watches": []})
 
 class WatchAcknowledgementTests(unittest.TestCase):
     @patch.object(refresh.watch, "gh_api")
@@ -145,33 +151,41 @@ class WatchAcknowledgementTests(unittest.TestCase):
         self.assertEqual(api.call_count, 2)
         self.assertIn("page=2", api.call_args.args[0])
 
-    def test_failed_issue_creation_keeps_previous_state_for_retry(self):
+    def test_detected_changes_never_write_github_issues(self):
+        w = refresh.watch
+        config = {"watches": [{"id": "release", "skills": ["demo"]}]}
+        with patch.object(w, "fetch_snapshot", return_value={"value": "v2"}), patch.object(w, "gh_api") as api:
+            first = w.detect_changes(config, {"watches": {"release": {"value": "v1"}}}, "token")
+            retry = w.detect_changes(config, {"watches": {"release": {"value": "v1"}}}, "token")
+            applied = w.detect_changes(config, {"watches": first["watches"]}, "token")
+        api.assert_not_called()
+        self.assertEqual(first["pending_watch_ids"], ["release"])
+        self.assertEqual(retry["pending_watch_ids"], ["release"])
+        self.assertEqual(applied["pending_watch_ids"], [])
+
+    def test_normal_detection_does_not_acknowledge_baseline(self):
         from argparse import Namespace
-        from contextlib import ExitStack, redirect_stdout, redirect_stderr
+        from contextlib import ExitStack, redirect_stdout
         from io import StringIO
         w = refresh.watch
-        args = Namespace(config="config", state="state", validate_config=False, dry_run=False, sync_state_only=False)
-        config = {"watches": [{"id": "release", "kind": "github_release", "issue_key": "demo", "skills": ["demo"]}]}
-        mocks = {
-            "parse_args": args, "resolve_config_paths": [Path("config")],
-            "merge_raw_configs": {}, "normalize_config": config,
-            "load_json": {"watches": {"release": {"value": "v1"}}},
-            "ensure_labels": None, "load_historical_watch_snapshots": {},
-            "load_open_issue_groups": {}, "reconcile_open_issues": ({}, {"groups": 0, "issues_rewritten": 0, "duplicates_closed": 0}),
-            "fetch_snapshot": {"kind": "github_release", "value": "v2"},
-        }
-        with ExitStack() as stack:
-            for name, value in mocks.items():
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            baseline = root / "baseline.json"
+            baseline.write_text('{"watches":{"release":{"value":"v1"}}}')
+            args = Namespace(config="config", state=str(baseline), report_dir=root / "report", validate_config=False, dry_run=False, sync_state_only=False)
+            config = {"watches": [{"id": "release", "skills": ["demo"]}]}
+            for name, value in {"parse_args": args, "resolve_config_paths": [], "merge_raw_configs": {}, "normalize_config": config}.items():
                 stack.enter_context(patch.object(w, name, return_value=value))
-            stack.enter_context(patch.dict(w.os.environ, {"GH_TOKEN": "test", "GITHUB_REPOSITORY": "o/r"}))
-            rotate = stack.enter_context(patch.object(w, "rotate_issue_group", side_effect=RuntimeError("GitHub unavailable")))
-            save = stack.enter_context(patch.object(w, "dump_json"))
             stack.enter_context(patch.object(w, "write_summary"))
             stack.enter_context(redirect_stdout(StringIO()))
-            stack.enter_context(redirect_stderr(StringIO()))
+            fetch = stack.enter_context(patch.object(w, "fetch_snapshot", return_value={"value": "v2"}))
+            self.assertEqual(w.main(), 0)
+            self.assertEqual(json.loads(baseline.read_text())["watches"]["release"]["value"], "v1")
+            self.assertEqual(json.loads((args.report_dir / "pending.json").read_text())["pending_watch_ids"], ["release"])
+            args.sync_state_only = True
+            fetch.side_effect = RuntimeError("network failure")
             self.assertEqual(w.main(), 1)
-            rotate.assert_called_once()
-            save.assert_not_called()
+            self.assertEqual(json.loads(baseline.read_text())["watches"]["release"]["value"], "v1")
 
 class PublishTests(unittest.TestCase):
     @patch.object(prs, "output")
@@ -185,11 +199,11 @@ class PublishTests(unittest.TestCase):
                    ("show", "-s", "--format=%ae", "previous"): prs.BOT_EMAIL,
                    ("rev-parse", "previous^{tree}"): "tree", ("rev-parse", "previous^"): "base"}
         git.side_effect = lambda *args: answers.get(args, "")
-        prs.publish("o/r", "token", {"completed_issues": [3]})
+        prs.publish("o/r", "token", {})
         self.assertFalse(any(call.args[0] == "push" for call in git.call_args_list))
         self.assertEqual(api.call_count, 1)
         self.assertEqual(api.call_args.kwargs["method"], "PATCH")
-        self.assertIn("Closes #3", api.call_args.kwargs["data"]["body"])
+        self.assertNotIn("Closes #", api.call_args.kwargs["data"]["body"])
         output.assert_called_once_with(changed="true", head="previous", base="base", pr="9")
 
     @patch.object(prs, "candidate_paths")
@@ -202,9 +216,9 @@ class PublishTests(unittest.TestCase):
     @patch.object(prs, "candidate_paths", return_value=[])
     @patch.object(prs, "find_pr", return_value=None)
     @patch.object(prs, "gh_api")
-    def test_reviewed_noop_closes_queue_without_commit(self, api, find, paths, output):
-        prs.publish("o/r", "token", {"completed_issues": [3]})
-        api.assert_called_once_with("/repos/o/r/issues/3", token="token", method="PATCH", data={"state": "closed"})
+    def test_reviewed_noop_has_no_issue_writes(self, api, find, paths, output):
+        prs.publish("o/r", "token", {})
+        api.assert_not_called()
         output.assert_called_once_with(changed="false")
 
 class LockedVendirTests(unittest.TestCase):

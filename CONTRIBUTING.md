@@ -36,7 +36,7 @@ The skill must be understandable by someone who has never used your project befo
 
 For upstream watch configuration, keep one obvious config surface:
 
-- [`.github/upstream-watch.json`](.github/upstream-watch.json) for shared metadata
+- [`.github/upstream-watch.json`](.github/upstream-watch.json) for base watch definitions
 - [`.github/upstream-watch*.json`](.github/) for shard files
 
 Each shard keeps the same two obvious lists:
@@ -380,7 +380,7 @@ python3 scripts/upstream_watch.py --dry-run
 
 Keep it simple:
 
-- keep [`.github/upstream-watch.json`](.github/upstream-watch.json) for `watch_issue_label` and `labels`
+- keep [`.github/upstream-watch.json`](.github/upstream-watch.json) as the base watch file
 - edit the relevant shard such as `upstream-watch.ai.json`, `upstream-watch.data.json`, `upstream-watch.platform.json`, or `upstream-watch-agent-framework.json`
 - keep shard names semantic and review-friendly
 - do not create numbered fragments or `.d` directory indirection
@@ -392,7 +392,8 @@ Keep it simple:
 
 ### What Happens After I Add A Watch?
 
-The nightly runner uses grouped upstream issues as its retry queue. Configure the
+The nightly runner compares sources with the last successfully applied baseline.
+Changed sources go directly to a refresh artifact and PR; issues are only for failures. Configure the
 content updater using [nightly refresh setup](docs/nightly-refresh.md). Imported
 skills use vendir; repo-owned skills require an updater that reads authoritative
 sources and returns scoped Markdown changes. Missing updater configuration is a
@@ -405,7 +406,7 @@ flowchart LR
   B --> C["Run scripts/upstream_watch.py --sync-state-only once"]
   C --> D["Commit the config and state baseline"]
   D --> E["00:17 UTC upstream-watch.yml checks sources"]
-  E --> F["If a release or doc page changes, automation opens or updates an issue"]
+  E --> F["Changed sources go directly to the refresh artifact"]
   F --> G["Refresh linked skills and create a catalog PR"]
   G --> H["Validate exact commit, then automatically merge"]
   H --> I["04:00 UTC release publishes unreleased changes"]
@@ -460,7 +461,7 @@ For normal config entries, every watch entry must define:
 
 The watcher derives `kind`, `id`, `name`, source coordinates, and default `notes`.
 You can still override those fields explicitly, but do it only when the default output would be unclear.
-Issues are deduplicated at the library or skill-group level, so related documentation pages should normally roll up into one open upstream issue instead of one issue per page.
+Changed documentation pages are deduplicated by affected skill. No issue is created for an ordinary upstream update.
 
 For project-specific libraries, the `skills` list must point to the dedicated project skill.
 Do not use umbrella skills such as `dotnet`, `architecture`, or `orleans` as placeholders for a concrete library watch.

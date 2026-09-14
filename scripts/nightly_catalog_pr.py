@@ -7,8 +7,9 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
-from upstream_watch import gh_api, list_labeled_issues
+from upstream_watch import gh_api
 
 BRANCH = "codex/nightly-catalog-refresh"
 MARKER = "<!-- nightly-catalog-refresh -->"
@@ -58,17 +59,10 @@ def find_pr(repo: str, token: str) -> dict | None:
 def publish(repo: str, token: str, report: dict) -> None:
     if report.get("failed"):
         raise ValueError("Cannot publish an incomplete skill refresh")
-    completed = report.get("completed_issues", [])
-    if any(not isinstance(n, int) or isinstance(n, bool) or n <= 0 for n in completed):
-        raise ValueError("Invalid completed issue numbers")
     paths = candidate_paths()
     pr = find_pr(repo, token)
     # Lock or transport-only changes are not a catalog update.
     if not any(p.startswith("catalog/") for p in paths):
-        # Content was examined successfully and needs no edit. Resolve the
-        # durable queue without manufacturing a commit merely to close issues.
-        for number in completed:
-            gh_api(f"/repos/{repo}/issues/{number}", token=token, method="PATCH", data={"state": "closed"})
         output(changed="false")
         print("No catalog changes; no PR or release needed.")
         return
@@ -96,7 +90,7 @@ def publish(repo: str, token: str, report: dict) -> None:
         f"{MARKER}\nRefresh imported upstream sources and affected catalog skills.\n\n"
         f"Validation runs against `{head}` using the reusable PR Checks workflow. "
         "Automatic merge requires every check to succeed and the base to remain unchanged.\n\n"
-        + "\n".join(f"Closes #{number}" for number in sorted(set(completed)))
+
     )
     fields = {"title": "chore: nightly upstream catalog refresh", "body": body}
     if pr:
@@ -127,6 +121,23 @@ def merge(repo: str, token: str, number: int, head: str, base: str) -> None:
     if not result.get("merged"):
         raise RuntimeError(f"GitHub refused merge: {result.get('message')}")
     print(f"Merged PR #{number}: {result['sha']}")
+
+
+def list_labeled_issues(repo: str, token: str, label: str, *, state: str) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        batch = gh_api(
+            f"/repos/{repo}/issues?state={state}&labels={label}&per_page=100&page={page}",
+            token=token,
+        )
+        if not isinstance(batch, list):
+            raise RuntimeError(f"Unexpected issue payload while listing failure issues for {repo}")
+        if not batch:
+            break
+        issues.extend(issue for issue in batch if not issue.get("pull_request"))
+        page += 1
+    return issues
 
 
 def report_status(repo: str, token: str, failed: bool, details: str) -> None:

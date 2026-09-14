@@ -29,27 +29,19 @@ def imported_skills() -> set[str]:
     return names
 
 
-def select_work(issues: list[dict], config: dict, state: dict) -> tuple[dict, dict]:
+def select_work(pending: dict, config: dict) -> dict:
+    if pending.get("errors"):
+        raise ValueError("Cannot refresh after upstream detection failed")
     index = {entry["id"]: entry for entry in config["watches"]}
     tasks: dict[str, dict] = {}
-    issue_skills: dict[int, list[str]] = {}
-    for issue in issues:
-        parsed = watch.parse_open_issue(issue, watch_index=index, state_watches=state.get("watches", {}))
-        if not parsed:
-            raise ValueError(f"Upstream issue #{issue['number']} has no valid watch payload")
-        _, _, snapshots = parsed
-        if not snapshots or any(key not in index for key in snapshots):
-            raise ValueError(f"Upstream issue #{issue['number']} has missing or unknown watches")
-        # Derive scope and source URLs from trusted repository configuration,
-        # never from text or a link supplied in an issue body.
-        skills = sorted({skill for key in snapshots for skill in index[key]["skills"]})
-        issue_skills[issue["number"]] = skills
-        for skill in skills:
+    for key in pending["pending_watch_ids"]:
+        if key not in index:
+            raise ValueError(f"Unknown pending watch: {key}")
+        entry = index[key]
+        for skill in entry["skills"]:
             task = tasks.setdefault(skill, {"skill": skill, "watches": {}})
-            for key in snapshots:
-                if skill in index[key]["skills"]:
-                    task["watches"][key] = index[key]
-    return tasks, issue_skills
+            task["watches"][key] = entry
+    return tasks
 
 
 def apply_response(skill_dir: Path, response: dict) -> bool:
@@ -115,13 +107,12 @@ def refresh_skill(skill_dir: Path, task: dict, command: list[str]) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--state", type=Path, default=ROOT / ".github/upstream-watch-state.json")
+    parser.add_argument("--pending", type=Path, default=ROOT / "artifacts/nightly-refresh/pending.json")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts/nightly-refresh/report.json")
     parser.add_argument("--dry-run", action="store_true", help="List pending skills without updates or model calls")
     args = parser.parse_args()
     config = watch.normalize_config(watch.merge_raw_configs(watch.resolve_config_paths(str(ROOT / ".github/upstream-watch.json"))))
-    issues = watch.list_labeled_issues(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"], config.get("watch_issue_label", "upstream-update"), state="open")
-    tasks, issue_skills = select_work(issues, config, watch.load_json(args.state, {}))
+    tasks = select_work(json.loads(args.pending.read_text()), config)
     imported = imported_skills()
     paths = {path.parent.name: path.parent for path in (ROOT / "catalog").glob("*/*/skills/*/SKILL.md")}
     results: dict[str, dict] = {}
@@ -139,12 +130,10 @@ def main() -> int:
                 results[skill] = refresh_skill(paths[skill], task, command)
         except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             results[skill] = {"status": "failed", "error": str(exc)[:2000]}
-    completed = [number for number, skills in issue_skills.items()
-                 if skills and all(results[skill]["status"] in {"updated", "unchanged", "imported"} for skill in skills)]
-    report = {"skills": results, "completed_issues": sorted(completed), "failed": any(r["status"] == "failed" for r in results.values())}
+    report = {"skills": results, "failed": any(r["status"] == "failed" for r in results.values())}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"Nightly refresh: {len(tasks)} skills, {len(completed)} resolved issues, {sum(r['status'] == 'failed' for r in results.values())} failures")
+    print(f"Nightly refresh: {len(tasks)} skills, {sum(r['status'] == 'failed' for r in results.values())} failures")
     return 1 if report["failed"] else 0
 
 

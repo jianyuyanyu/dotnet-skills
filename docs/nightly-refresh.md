@@ -1,8 +1,8 @@
 # Nightly catalog refresh
 
 `upstream-watch.yml` runs at **00:17 UTC** and supports manual dispatch. It checks
-all configured upstream watches, saves observation state outside Git, syncs
-vendir sources, and processes open grouped upstream issues. One automation PR on
+all configured upstream watches against the last applied baseline, writes pending
+changes to an artifact, syncs vendir sources, and refreshes affected skills. One automation PR on
 `codex/nightly-catalog-refresh` holds the proposed catalog changes.
 
 `catalog-check.yml` is both the normal PR workflow and a reusable workflow. The
@@ -26,7 +26,7 @@ Imported upstream skills are copied verbatim through vendir and the canonical
 importer. They do not require an AI provider. Repo-owned skills use one shared
 content-updater command configured in the Actions repository variable
 `NIGHTLY_SKILL_REFRESH_COMMAND`. An empty command fails visibly when a repo-owned
-skill has pending changes; it never silently marks those issues as resolved.
+skill has pending changes; it never silently marks those changes as applied.
 
 The command receives one JSON request on stdin:
 
@@ -74,28 +74,32 @@ escapes, and oversized responses. A single failure prevents publishing the batch
 ## No changes and retries
 
 - Unchanged or transport-only updates do not create a catalog PR.
-- Successfully reviewed no-change issues close without a synthetic release commit.
-- Completed issues with content edits close when the catalog PR merges.
-- Failed fetches or issue creation do not acknowledge a new watch-state baseline.
-- Failed refreshes or checks leave unresolved work queued for the next night.
-- One `nightly-refresh-failure` issue tracks the failure and links to the run.
+- Ordinary upstream changes never create, rotate, or close GitHub issues.
+- The applied baseline is cached only after a verified merge or a validated no-op.
+- Failed detection, refresh, validation, or merge leaves that baseline unchanged,
+  so the next night redetects unfinished work. A cache miss rechecks from the
+  checked-in bootstrap baseline rather than dropping pending changes.
+- One `nightly-refresh-failure` issue is created or updated only when something
+  fails; it links to the failed run and closes after recovery.
 - Reports are retained as the `nightly-refresh` artifact for seven days.
 - Human commits on the automation branch are never force-overwritten.
 
 ## Local inspection and validation
 
-Authenticate `gh`, then inspect the durable queue without editing skills or
-calling a model:
+Authenticate `gh`, then detect upstream changes and inspect the affected skills
+without editing skills, creating issues, or calling a model:
 
 ```bash
 GITHUB_REPOSITORY=owner/repository GH_TOKEN="$(gh auth token)" \
-  python3 scripts/nightly_skill_refresh.py --dry-run
+  python3 scripts/upstream_watch.py --dry-run
+python3 scripts/nightly_skill_refresh.py --dry-run
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 python3 scripts/upstream_watch.py --validate-config
 actionlint .github/workflows/upstream-watch.yml .github/workflows/catalog-check.yml .github/workflows/publish-catalog.yml
 ```
 
-The dry-run report is written under `artifacts/nightly-refresh/`. A real refresh
+Detection writes `pending.json` and `next-state.json` without advancing the
+applied baseline. The dry-run report is written under `artifacts/nightly-refresh/`. A real refresh
 must first run `bash scripts/sync_external_catalog_sources.sh`, then invoke
 `nightly_skill_refresh.py`, validate the catalog, and publish the candidate.
 
