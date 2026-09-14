@@ -207,6 +207,26 @@ class PublishTests(unittest.TestCase):
         api.assert_called_once_with("/repos/o/r/issues/3", token="token", method="PATCH", data={"state": "closed"})
         output.assert_called_once_with(changed="false")
 
+class LockedVendirTests(unittest.TestCase):
+    def test_locked_verification_keeps_committed_descriptive_metadata(self):
+        import os
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "external-sources").mkdir()
+            (root / "scripts").mkdir()
+            lock = root / "external-sources/vendir.lock.yml"
+            lock.write_text("original locked SHA and descriptive tag\n")
+            (root / "scripts/import_external_catalog_sources.py").write_text("from pathlib import Path\nPath('imported').touch()\n")
+            vendir = root / "vendir"
+            vendir.write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nassert "--locked" in sys.argv\np=Path(sys.argv[sys.argv.index("--lock-file")+1])\nassert p.read_text()=="original locked SHA and descriptive tag\\n"\np.write_text("same SHA with different descriptive tag\\n")\n')
+            vendir.chmod(0o755)
+            script = Path(__file__).resolve().parents[1] / "sync_external_catalog_sources.sh"
+            subprocess.run(["bash", str(script), "--locked"], cwd=root,
+                           env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}"}, check=True, capture_output=True)
+            self.assertEqual(lock.read_text(), "original locked SHA and descriptive tag\n")
+            self.assertTrue((root / "imported").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

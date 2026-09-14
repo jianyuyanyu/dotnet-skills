@@ -11,6 +11,8 @@ locked vendir/import verification, catalog and agent validation, Waza, .NET buil
 tests, pack, and install smoke tests. The merge job requires both check jobs to
 succeed and verifies that the PR head and `main` still match the checked inputs.
 GitHub branch protection still applies; automation does not use an admin bypass.
+Locked verification reads a temporary copy of the committed lockfile because
+vendir recalculates descriptive git tags even when the source SHA is unchanged.
 
 The existing `publish-catalog.yml` runs at **04:00 UTC** and releases new commits
 through catalog assets, NuGet tools, and GitHub Pages. It skips a revision already

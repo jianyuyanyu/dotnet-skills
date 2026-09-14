@@ -33,8 +33,12 @@ flowchart TD
 - [x] Reuse PR checks and lock vendir verification to committed snapshots.
 - [x] Document updater contract, no-op behavior, retries and release ordering.
 - [ ] Document and wire the selected provider credential.
-- [ ] Run regression tests, catalog/watch validation, workflow lint and live dry run.
-- [ ] Commit, push, and verify the GitHub workflow against the delivered revision.
+- [x] Run regression tests, catalog/watch validation, workflow lint and live dry run.
+  Live validation fetched all 204 watched sources successfully. The queue dry run
+  resolves 130 skills. Remote tool build/test/pack/smoke passed; locked vendir
+  metadata preservation is undergoing a follow-up CI run.
+- [x] Commit and push draft PR #1573.
+- [ ] Verify final GitHub checks and a live nightly run after provider setup.
 
 ## Validation matrix
 
