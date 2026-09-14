@@ -34,7 +34,10 @@ the validated revision. It does not bypass repository protection.
 The automation PR uses `codex/nightly-catalog-refresh`. Successful changes merge
 without manual intervention. A conflict, failed check, permission error, or refused
 merge produces a `nightly-refresh-failure` issue with the run link and failure
-context so the maintainer can intervene. Recovery closes that failure issue.
+context so the maintainer can intervene. Release or Pages failures create a
+separate `nightly-release-failure` issue. Recovery closes only the corresponding
+failure issue. Catalog releases are published after NuGet succeeds, and their
+assets and Pages build use the same source commit.
 
 ```mermaid
 flowchart TD

@@ -24,9 +24,10 @@ flowchart LR
 - [x] Remove AI rewriting and provider setup from code and documentation.
 - [x] Reuse vendir/importer source-layout discovery and verbatim copy behavior.
 - [x] Keep watches, scoped PRs, exact-commit checks and failure-only issues.
-- [ ] Verify local regressions and workflow syntax.
-- [ ] Push directly to main and execute the nightly workflow.
-- [ ] Verify real automatic PR/merge or no-op outcome and release path.
+- [x] Verify local regressions and workflow syntax (41 tests and actionlint).
+- [x] Push directly to main and execute the nightly workflow.
+- [x] Verify automatic PR and merge: PR #1580, Actions run 34874471959.
+- [ ] Verify the release path through a live release run.
 
 ## Evidence
 
@@ -34,3 +35,7 @@ Regression coverage includes canonical upstream layouts, excluded skills,
 verbatim imports, repeated/no-op publication, changed head/base rejection,
 GitHub merge refusal and failure reporting. Live Actions results establish
 runtime behavior; local passing tests alone do not prove automatic delivery.
+
+The live refresh run passed watch, both reusable validation jobs, automatic merge
+and baseline promotion. Release failures are reported separately, and the public
+catalog release is finalized only after NuGet publication and asset upload.

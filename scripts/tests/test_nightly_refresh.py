@@ -90,6 +90,27 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(api.call_args.kwargs["data"], {"state": "closed"})
 
 
+    @patch.object(prs, "gh_api")
+    @patch.object(prs, "list_labeled_issues")
+    def test_release_recovery_does_not_close_refresh_failure(self, listing, api):
+        listing.return_value = [{"number": 7, "body": prs.MARKER},
+                                {"number": 8, "body": "<!-- nightly-catalog-release -->"}]
+        prs.report_status("o/r", "token", False, "", release=True)
+        listing.assert_called_once_with("o/r", "token", "nightly-release-failure", state="open")
+        self.assertEqual(api.call_count, 1)
+        self.assertEqual(api.call_args.args[0], "/repos/o/r/issues/8")
+
+    @patch.object(prs, "gh_api")
+    @patch.object(prs, "list_labeled_issues", return_value=[])
+    def test_release_failure_creates_separate_issue(self, listing, api):
+        api.side_effect = [[{"name": "nightly-release-failure"}], {}]
+        prs.report_status("o/r", "token", True, "NuGet publish failed", release=True)
+        fields = api.call_args.kwargs["data"]
+        self.assertEqual(fields["labels"], ["nightly-release-failure"])
+        self.assertIn("NuGet publish failed", fields["body"])
+        self.assertIn("<!-- nightly-catalog-release -->", fields["body"])
+
+
 class WatchAcknowledgementTests(unittest.TestCase):
     @patch.object(watch, "gh_api")
     def test_release_hidden_behind_extension_releases_is_found(self, api):

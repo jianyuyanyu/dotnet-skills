@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pages: write
   id-token: write
 
@@ -38,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     outputs:
+      source_sha: ${{ steps.changes.outputs.source_sha }}
       should_release: ${{ steps.changes.outputs.has_new_commits }}
       previous_tag: ${{ steps.changes.outputs.latest_tag }}
       catalog_version: ${{ steps.version.outputs.version }}
@@ -59,6 +61,7 @@ jobs:
         run: |
           git fetch --force --tags origin main
           git checkout --detach origin/main
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
           latest_tag=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq 'map(select(.draft == false and (.tag_name | startswith("'"${{ env.CATALOG_TAG_PREFIX }}"'")))) | sort_by(.published_at) | reverse | (.[0].tag_name // "")')
           main_ref="origin/main"
@@ -215,7 +218,7 @@ jobs:
             --tag "${{ steps.version.outputs.tag }}" \
             --catalog-version "${{ steps.version.outputs.version }}" \
             --package-version "${{ steps.package_version.outputs.package_version }}" \
-            --target-commit "${{ github.sha }}" \
+            --target-commit "${{ steps.changes.outputs.source_sha }}" \
             --output artifacts/release/release-notes.md \
             "${previous_args[@]}"
 
@@ -264,23 +267,6 @@ jobs:
           path: ${{ env.PACKAGE_OUTPUT_GLOB }}
           if-no-files-found: error
 
-      - name: Create or update catalog release
-        if: steps.changes.outputs.has_new_commits == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          tag='${{ steps.version.outputs.tag }}'
-          title="Catalog ${{ steps.version.outputs.version }}"
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --title "$title" --notes-file artifacts/release/release-notes.md
-          else
-            gh release create "$tag" --title "$title" --notes-file artifacts/release/release-notes.md --latest
-          fi
-
-          gh release upload "$tag" artifacts/catalog-release/dotnet-skills-manifest.json artifacts/catalog-release/dotnet-skills-catalog.zip --clobber
-
       - name: Publish to NuGet
         if: steps.changes.outputs.has_new_commits == 'true'
         shell: bash
@@ -321,6 +307,24 @@ jobs:
             exit "$exit_code"
           done
 
+      - name: Create or update catalog release
+        if: steps.changes.outputs.has_new_commits == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag='${{ steps.version.outputs.tag }}'
+          title="Catalog ${{ steps.version.outputs.version }}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$title" --notes-file artifacts/release/release-notes.md
+          else
+            gh release create "$tag" --title "$title" --notes-file artifacts/release/release-notes.md --target "${{ steps.changes.outputs.source_sha }}" --draft
+          fi
+
+          gh release upload "$tag" artifacts/catalog-release/dotnet-skills-manifest.json artifacts/catalog-release/dotnet-skills-catalog.zip --clobber
+          gh release edit "$tag" --draft=false --latest
+
   build-pages:
     if: needs.release.outputs.should_release == 'true'
     needs: release
@@ -329,6 +333,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.source_sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -367,3 +373,27 @@ jobs:
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  report:
+    if: always()
+    needs: [release, build-pages, deploy-pages]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Report release failures only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          BUILD_RESULT: ${{ needs.build-pages.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-pages.result }}
+        run: |
+          args=(--release --details "Release: $RELEASE_RESULT; Pages build: $BUILD_RESULT; Pages deploy: $DEPLOY_RESULT. See the failed run for the concrete error.")
+          if [[ "$RELEASE_RESULT" != success || "$BUILD_RESULT" == failure || "$BUILD_RESULT" == cancelled || "$DEPLOY_RESULT" == failure || "$DEPLOY_RESULT" == cancelled ]]; then
+            args+=(--failed)
+          fi
+          python3 scripts/nightly_catalog_pr.py report "${args[@]}"

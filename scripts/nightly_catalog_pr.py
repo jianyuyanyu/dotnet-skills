@@ -137,24 +137,27 @@ def list_labeled_issues(repo: str, token: str, label: str, *, state: str) -> lis
     return issues
 
 
-def report_status(repo: str, token: str, failed: bool, details: str) -> None:
+def report_status(repo: str, token: str, failed: bool, details: str, *, release: bool = False) -> None:
+    marker = "<!-- nightly-catalog-release -->" if release else MARKER
+    label = "nightly-release-failure" if release else FAILURE_LABEL
+    title = "Nightly catalog release failed" if release else "Nightly catalog refresh failed"
     # List by marker as well as label: do not close unrelated issues.
-    issues = list_labeled_issues(repo, token, FAILURE_LABEL, state="open")
-    issues = [i for i in issues if MARKER in (i.get("body") or "")]
+    issues = list_labeled_issues(repo, token, label, state="open")
+    issues = [i for i in issues if marker in (i.get("body") or "")]
     if not failed:
         for issue in issues:
             gh_api(f"/repos/{repo}/issues/{issue['number']}", token=token, method="PATCH", data={"state": "closed"})
         return
     run = f"https://github.com/{repo}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"
-    fields = {"title": "Nightly catalog refresh failed", "body": f"{MARKER}\nThe nightly refresh did not complete. Pending upstream work remains queued.\n\n[Failed run]({run})\n\n{details[:6000]}"}
+    fields = {"title": title, "body": f"{marker}\nThe nightly automation did not complete.\n\n[Failed run]({run})\n\n{details[:6000]}"}
     if issues:
         gh_api(f"/repos/{repo}/issues/{issues[0]['number']}", token=token, method="PATCH", data=fields)
     else:
         # Ensure the failure label exists without masking permission/network failures.
         labels = gh_api(f"/repos/{repo}/labels?per_page=100", token=token)
-        if not any(label["name"] == FAILURE_LABEL for label in labels):
-            gh_api(f"/repos/{repo}/labels", token=token, method="POST", data={"name": FAILURE_LABEL, "color": "B60205", "description": "Nightly catalog refresh needs attention"})
-        gh_api(f"/repos/{repo}/issues", token=token, method="POST", data={**fields, "labels": [FAILURE_LABEL]})
+        if not any(item["name"] == label for item in labels):
+            gh_api(f"/repos/{repo}/labels", token=token, method="POST", data={"name": label, "color": "B60205", "description": "Nightly catalog automation needs attention"})
+        gh_api(f"/repos/{repo}/issues", token=token, method="POST", data={**fields, "labels": [label]})
 
 
 def main() -> None:
@@ -163,6 +166,7 @@ def main() -> None:
     parser.add_argument("--pr", type=int)
     parser.add_argument("--head")
     parser.add_argument("--base")
+    parser.add_argument("--release", action="store_true", help="Report release failures separately from refresh failures")
     parser.add_argument("--failed", action="store_true")
     parser.add_argument("--details", default="")
     args = parser.parse_args()
@@ -174,7 +178,7 @@ def main() -> None:
             parser.error("merge requires --pr, --head and --base")
         merge(repo, token, args.pr, args.head, args.base)
     else:
-        report_status(repo, token, args.failed, args.details)
+        report_status(repo, token, args.failed, args.details, release=args.release)
 
 
 if __name__ == "__main__":
