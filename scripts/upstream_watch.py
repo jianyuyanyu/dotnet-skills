@@ -436,12 +436,19 @@ def human_release(release: dict[str, Any]) -> str:
 
 
 def fetch_github_release(watch: dict[str, Any], token: str | None) -> dict[str, Any]:
-    releases = gh_api(
-        f"/repos/{watch['owner']}/{watch['repo']}/releases?per_page=10",
-        token=token,
-    )
-    if not isinstance(releases, list):
-        raise RuntimeError(f"Unexpected release payload for {watch['id']}")
+    releases: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        batch = gh_api(
+            f"/repos/{watch['owner']}/{watch['repo']}/releases?per_page=100&page={page}",
+            token=token,
+        )
+        if not isinstance(batch, list):
+            raise RuntimeError(f"Unexpected release payload for {watch['id']}")
+        releases.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
 
     include_prereleases = bool(watch.get("include_prereleases", False))
     match_tag_regex = watch.get("match_tag_regex")
@@ -1373,7 +1380,9 @@ def main() -> int:
             errors.append(issue_error)
             summary.append(f"- Error for issue group `{pending_update['issue_key']}`: {exc}")
 
-    if not args.dry_run:
+    # A snapshot is acknowledged only after every detected change is durably
+    # queued. Otherwise a failed issue creation would lose the event next night.
+    if not args.dry_run and not errors:
         dump_json(state_path, next_state)
 
     summary.extend(

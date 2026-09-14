@@ -48,6 +48,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Check for new commits on main since latest catalog release
@@ -57,16 +58,19 @@ jobs:
         shell: bash
         run: |
           git fetch --force --tags origin main
+          git checkout --detach origin/main
 
           latest_tag=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq 'map(select(.draft == false and (.tag_name | startswith("'"${{ env.CATALOG_TAG_PREFIX }}"'")))) | sort_by(.published_at) | reverse | (.[0].tag_name // "")')
           main_ref="origin/main"
           force_release='${{ inputs.force_release }}'
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "$force_release" == "true" ]]; then
-            echo "has_new_commits=true" >> "$GITHUB_OUTPUT"
-            echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
-            echo "override=true" >> "$GITHUB_OUTPUT"
-            echo "reason=manual_force_release" >> "$GITHUB_OUTPUT"
+            {
+              echo "has_new_commits=true"
+              echo "latest_tag=$latest_tag"
+              echo "override=true"
+              echo "reason=manual_force_release"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -76,9 +80,11 @@ jobs:
             else
               echo "has_new_commits=false" >> "$GITHUB_OUTPUT"
             fi
-            echo "latest_tag=" >> "$GITHUB_OUTPUT"
-            echo "override=false" >> "$GITHUB_OUTPUT"
-            echo "reason=initial_catalog_release" >> "$GITHUB_OUTPUT"
+            {
+              echo "latest_tag="
+              echo "override=false"
+              echo "reason=initial_catalog_release"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -90,9 +96,11 @@ jobs:
             echo "has_new_commits=false" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
-          echo "override=false" >> "$GITHUB_OUTPUT"
-          echo "reason=$([ "$commits_since_tag" -gt 0 ] && echo commits_since_last_release || echo no_new_commits)" >> "$GITHUB_OUTPUT"
+          {
+            echo "latest_tag=$latest_tag"
+            echo "override=false"
+            echo "reason=$([ "$commits_since_tag" -gt 0 ] && echo commits_since_last_release || echo no_new_commits)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Skip release when no new commits exist
         if: steps.changes.outputs.has_new_commits != 'true'

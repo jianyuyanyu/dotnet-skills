@@ -510,6 +510,10 @@ For GitHub automation:
 
 The upstream automation exists so the skill catalog stays current without requiring manual ecosystem monitoring.
 
+- Run the complete upstream refresh every night before the 04:00 UTC release: check all configured watches, refresh affected skills and vendir imports, create or update a pull request only for real catalog changes, validate the exact proposed commit, and merge automatically only after successful checks.
+- Report refresh or validation failures in a deduplicated GitHub issue with a link to the failed run. Leave unresolved upstream work pending for retry; never mark a failed refresh as handled.
+- Keep unchanged nights quiet: watch-state changes alone must not create a catalog PR or release.
+
 Human-maintained upstream watch configuration lives in a small base file plus optional shard files in the same `.github/` folder:
 
 - [`.github/upstream-watch.json`](.github/upstream-watch.json) for shared metadata such as `watch_issue_label` and `labels`
@@ -570,7 +574,7 @@ When adding a documentation watch:
 - Keep issue fan-out reviewable. Upstream-watch automation must track one open maintenance issue per library or skill group, not one permanently open issue per individual documentation page when those pages roll up to the same library refresh.
 - When another upstream change arrives for a library or skill group that already has an open upstream-watch issue, carry the pending watch context forward into the replacement issue so the new issue starts with the full current upstream state.
 - Upstream-watch issue discovery must paginate across the full matching issue set before deciding whether an issue already exists. Do not assume the first page of GitHub issues is sufficient for deduplication or repair.
-- Upstream-watch automation must be issue-driven and must not create `catalog-v*` releases or any other user-facing release noise just because machine-maintained watch state changed.
+- Upstream-watch issues are the durable refresh queue for nightly automation; machine-maintained watch state alone must not create `catalog-v*` releases or other user-facing release noise.
 - Do not commit routine upstream-watch state refreshes to `main`. Persist automation state in a non-release-triggering channel so scheduled watch runs can open or rotate issues without manufacturing empty catalog releases.
 - When a new upstream event arrives for a library or skill group that already has an open upstream-watch issue, create a fresh issue for the new event and close the older open issue as superseded by the newer one.
 
@@ -661,8 +665,8 @@ The intended maintenance logic is:
 1. Keep the catalog broad enough to cover the real .NET ecosystem.
 2. Keep each skill narrow enough that routing is still obvious.
 3. Keep content tied to official sources.
-4. Use upstream automation to surface change, not to auto-rewrite skills.
-5. Open issues when upstream changes happen, then update the affected skills deliberately.
+4. Use nightly automation to detect upstream changes and update affected skills from authoritative sources through validated pull requests.
+5. Merge successful refreshes automatically, retain failures for retry, and let the unified release publish actual changes.
 
 This repository should behave like a maintainable documentation-and-automation system, not like a dump of one-off prompt files.
 

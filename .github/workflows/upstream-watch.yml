@@ -1,13 +1,14 @@
-name: Upstream Watch
+name: Nightly Catalog Refresh
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 9 * * *"
+    - cron: "17 0 * * *"
 
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 concurrency:
   group: upstream-watch
@@ -19,10 +20,19 @@ env:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      changed: ${{ steps.publish.outputs.changed }}
+      head: ${{ steps.publish.outputs.head }}
+      base: ${{ steps.publish.outputs.base }}
+      pr: ${{ steps.publish.outputs.pr }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -57,8 +67,89 @@ jobs:
         run: python3 scripts/upstream_watch.py --state "${{ env.UPSTREAM_WATCH_STATE_FILE }}"
 
       - name: Save upstream watch state cache
-        if: always()
         uses: actions/cache/save@v4
         with:
           path: ${{ env.UPSTREAM_WATCH_STATE_FILE }}
           key: upstream-watch-state-${{ github.repository_id }}-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: Install vendir
+        run: |
+          mkdir -p .tools
+          curl -fsSL https://carvel.dev/install.sh | K14SIO_INSTALL_BIN_DIR="$PWD/.tools" bash
+          echo "$PWD/.tools" >> "$GITHUB_PATH"
+
+      - name: Refresh external catalog sources
+        run: bash scripts/sync_external_catalog_sources.sh
+
+      - name: Refresh pending watched skills
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIGHTLY_SKILL_REFRESH_COMMAND: ${{ vars.NIGHTLY_SKILL_REFRESH_COMMAND }}
+        run: python3 scripts/nightly_skill_refresh.py --state "${{ env.UPSTREAM_WATCH_STATE_FILE }}"
+
+      - name: Validate refreshed catalog
+        run: |
+          python3 scripts/generate_catalog.py --validate-only
+          python3 scripts/generate_agent_catalog.py --validate-only
+          python3 scripts/generate_pages.py
+
+      - name: Create or update nightly pull request
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/nightly_catalog_pr.py publish
+
+      - name: Upload refresh report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-refresh
+          path: artifacts/nightly-refresh/
+          retention-days: 7
+
+  validate:
+    needs: watch
+    if: needs.watch.outputs.changed == 'true'
+    uses: ./.github/workflows/catalog-check.yml
+    with:
+      ref: ${{ needs.watch.outputs.head }}
+
+  merge:
+    needs: [watch, validate]
+    if: needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Merge the verified catalog commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.watch.outputs.pr }}
+          VALIDATED_HEAD: ${{ needs.watch.outputs.head }}
+          VALIDATED_BASE: ${{ needs.watch.outputs.base }}
+        run: python3 scripts/nightly_catalog_pr.py merge --pr "$PR_NUMBER" --head "$VALIDATED_HEAD" --base "$VALIDATED_BASE"
+
+  report:
+    needs: [watch, validate, merge]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Report failure or close recovered failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCH_RESULT: ${{ needs.watch.result }}
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+          MERGE_RESULT: ${{ needs.merge.result }}
+          CHANGED: ${{ needs.watch.outputs.changed }}
+        run: |
+          args=()
+          if [[ "$WATCH_RESULT" != success ]] || [[ "$CHANGED" == true && ( "$VALIDATION_RESULT" != success || "$MERGE_RESULT" != success ) ]]; then
+            args+=(--failed)
+          fi
+          python3 scripts/nightly_catalog_pr.py report "${args[@]}" --details "Refresh: $WATCH_RESULT; validation: $VALIDATION_RESULT; merge: $MERGE_RESULT."

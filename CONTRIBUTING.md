@@ -392,14 +392,23 @@ Keep it simple:
 
 ### What Happens After I Add A Watch?
 
+The nightly runner uses grouped upstream issues as its retry queue. Configure the
+content updater using [nightly refresh setup](docs/nightly-refresh.md). Imported
+skills use vendir; repo-owned skills require an updater that reads authoritative
+sources and returns scoped Markdown changes. Missing updater configuration is a
+reported failure, never a successful refresh. CI uses `vendir sync --locked` so
+checks validate the committed snapshot instead of advancing upstream again.
+
 ```mermaid
 flowchart LR
   A["Edit upstream-watch.json or a named upstream-watch.<domain>.json shard"] --> B["Run scripts/upstream_watch.py --validate-config"]
   B --> C["Run scripts/upstream_watch.py --sync-state-only once"]
   C --> D["Commit the config and state baseline"]
-  D --> E["Scheduled upstream-watch.yml checks sources every day"]
+  D --> E["00:17 UTC upstream-watch.yml checks sources"]
   E --> F["If a release or doc page changes, automation opens or updates an issue"]
-  F --> G["Update the linked catalog skills and docs"]
+  F --> G["Refresh linked skills and create a catalog PR"]
+  G --> H["Validate exact commit, then automatically merge"]
+  H --> I["04:00 UTC release publishes unreleased changes"]
 ```
 
 ### GitHub Release Watch Example

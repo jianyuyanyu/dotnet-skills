@@ -308,6 +308,8 @@ When you refresh vendored upstream content locally, use `bash scripts/sync_exter
 
 ## How Updates Are Tracked
 
+The nightly refresh starts at `00:17 UTC` in [upstream-watch.yml](.github/workflows/upstream-watch.yml). It checks configured sources, refreshes vendir imports and pending skills, and creates or updates one catalog PR when content changes. The same PR Checks validate the proposed commit before automatic merge. The `04:00 UTC` release publishes unreleased changes; unchanged nights create no PR or release. Failures remain queued and are reported in one maintenance issue. See [nightly refresh setup](docs/nightly-refresh.md) for the content-updater configuration.
+
 This repository does not guess what to monitor.
 
 It watches only the sources explicitly listed in the upstream watch config surface:
@@ -333,11 +335,11 @@ High-level flow:
 flowchart LR
   A["Edit upstream-watch.json or a named upstream-watch.<domain>.json shard"] --> B["Run scripts/upstream_watch.py --validate-config"]
   B --> C["Run dry-run and sync-state-only once"]
-  C --> D["Scheduled upstream-watch.yml runs upstream_watch.py daily"]
+  C --> D["00:17 UTC upstream-watch.yml checks configured sources"]
   D --> E["GitHub release or documentation change is detected"]
   E --> F["Automation opens or updates one grouped upstream issue per library or skill set"]
-  F --> G["A human or agent updates catalog/<type>/<package>/ content and docs"]
-  G --> H["Changes merge to main"]
+  F --> G["Nightly runner refreshes affected skills and vendir imports"]
+  G --> H["Catalog PR passes reusable checks and merges automatically"]
   H --> I["04:00 UTC release pipeline publishes catalog, site, and tool"]
 ```
 
