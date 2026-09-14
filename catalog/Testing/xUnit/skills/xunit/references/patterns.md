@@ -289,10 +289,10 @@ public class PaymentProcessorTests
 
 ## Output and Diagnostics
 
-Use `ITestOutputHelper` for test diagnostics:
+Use `ITestOutputHelper` only for bounded actionable diagnostics under the `SKILL.md` output budget. Avoid unconditional per-test input/timing messages; put needed timing evidence in the failing assertion:
 
 ```csharp
-public class DiagnosticTests(ITestOutputHelper output)
+public class DiagnosticTests
 {
     [Fact]
     public void ComplexCalculation_LargeInput_CompletesWithinTimeout()
@@ -300,7 +300,6 @@ public class DiagnosticTests(ITestOutputHelper output)
         // Arrange
         var calculator = new ComplexCalculator();
         var input = GenerateLargeInput();
-        output.WriteLine($"Testing with input size: {input.Length}");
 
         var stopwatch = Stopwatch.StartNew();
 
@@ -309,8 +308,8 @@ public class DiagnosticTests(ITestOutputHelper output)
 
         // Assert
         stopwatch.Stop();
-        output.WriteLine($"Completed in {stopwatch.ElapsedMilliseconds}ms");
-        Assert.True(stopwatch.ElapsedMilliseconds < 5000, "Calculation took too long");
+        Assert.True(stopwatch.ElapsedMilliseconds < 5000,
+            $"Calculation took {stopwatch.ElapsedMilliseconds}ms; expected less than 5000ms.");
     }
 
     private static int[] GenerateLargeInput() => Enumerable.Range(0, 100_000).ToArray();

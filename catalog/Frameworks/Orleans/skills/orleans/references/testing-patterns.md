@@ -188,29 +188,7 @@ For Playwright:
 
 ## Failure Diagnostics
 
-When a host-backed Orleans test fails, emit server-side logs before rethrowing:
-
-```csharp
-var logStart = DateTimeOffset.UtcNow;
-
-try
-{
-    var response = await app.CreateApiClient().GetAsync("/health");
-    response.EnsureSuccessStatusCode();
-}
-catch
-{
-    Console.WriteLine(app.GetErrorLogDump(logStart));
-    throw;
-}
-```
-
-Useful practices:
-
-- capture error/critical logs from the Host into a test log collector
-- print the log dump on HTTP 500 or startup failures
-- save Playwright screenshots and HTML on UI failures
-- keep AppHost resource logs available when resource-health waits fail
+Follow the `SKILL.md` Diagnostic Output Budget: keep progress/ANSI visible, collect Warning/Error/Critical logs in a size-bounded collector, and show only the exact test/resource failure, root exception, and relevant stack frames (at most 80 lines / 8 KiB per response). Never print the full collector on HTTP 500, startup failures, or crashes. Link Playwright screenshots/HTML and inspect only bounded resource-error excerpts when health waits fail. Preserve the original exception and runner exit code.
 
 ## Anti-Patterns
 

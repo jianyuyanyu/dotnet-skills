@@ -7,6 +7,10 @@ description: "Format or verify trusted .NET projects with the SDK-provided `dotn
 
 Use the formatter already shipped with the selected .NET SDK. Preserve the repository's formatter ownership, existing changes, and configured style instead of introducing new preferences.
 
+## Diagnostic Output Budget
+
+Keep warnings/errors and a concise result; avoid routine verbose or diagnostic console output. Preserve native progress/ANSI when running tests. On failure, show only the relevant diagnostic and stack frames, deduplicated and capped at 80 lines / 8 KiB per response. Collect extra diagnostics only for an unresolved problem in size-bounded artifacts outside model context; link them and inspect exact bounded excerpts. Never dump full logs/reports or hide the command exit code through filtering.
+
 ## Workflow
 
 1. Read the nearest `AGENTS.md`, `global.json`, solution/project files, `.editorconfig`, and current Git status.

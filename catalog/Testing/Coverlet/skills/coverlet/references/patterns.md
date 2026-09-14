@@ -292,14 +292,7 @@ dotnet test /p:CollectCoverage=true \
 
 ### Verify Exclusions Work
 
-Run with verbose output to see what is being excluded:
-
-```bash
-# Console tool
-coverlet ... --verbosity detailed
-
-# Check generated coverage file for excluded types
-```
+Inspect the generated coverage artifact for the exact excluded type first. Enable detailed diagnostics only if that bounded inspection cannot explain the exclusion; capture them in a size-bounded artifact outside model context, then show only matching warning/error or exclusion evidence within 80 lines / 8 KiB. Never stream the full coverage report or detailed log; preserve the command exit code.
 
 ### Common Issues
 

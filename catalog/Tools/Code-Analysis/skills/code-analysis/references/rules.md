@@ -128,8 +128,8 @@ Prefer for category-level or scope-based configuration.
 ## Discovering Available Rules
 
 ```bash
-# List all analyzer diagnostics from a build
-dotnet build /p:ReportAnalyzer=true /v:d | grep "CA\|IDE"
+# Show build warnings and errors without a diagnostic log stream
+dotnet build --verbosity quiet
 
 # Get rule documentation
 # https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/

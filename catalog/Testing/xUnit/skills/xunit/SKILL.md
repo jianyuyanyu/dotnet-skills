@@ -6,6 +6,10 @@ compatibility: "Requires a .NET solution or project with xUnit packages; respect
 
 # xUnit.net
 
+## Diagnostic Output Budget
+
+Keep native test progress and ANSI visible; use the detected runner's supported flags (`--progress on --ansi on` for MTP/TUnit), not MTP switches on VSTest. Keep console logs at `Warning` or higher and one concise final summary. Do not replay progress redraws, successful-test output, or Information/Debug/Trace logs into model context. On failure/crash, show only the failing test/resource, root error, and relevant stack frames; deduplicate and cap each diagnostic response at 80 lines / 8 KiB. Never dump entire console/host/browser logs, HTML, TRX, or crash artifacts. Keep necessary artifacts size-bounded outside context, link them, and inspect exact bounded excerpts. Preserve the runner exit code through capture/filtering; disclose truncation. Silence alone does not establish a hang.
+
 ## Trigger On
 
 - the repo uses xUnit v2 or xUnit v3

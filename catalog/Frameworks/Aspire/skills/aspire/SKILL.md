@@ -27,6 +27,8 @@ description: "Build, upgrade, and operate Aspire 13.5.x C# or TypeScript applica
 8. For integration tests, keep one shared AppHost fixture per test session. Use `Aspire.Hosting.Testing` to boot the distributed app, create `HttpClient` or SignalR clients from the AppHost, and layer `WebApplicationFactory` on top only when tests need direct Host DI, grains, or runtime services. Fixture sharing amortizes startup and must not serialize tests; keep consumers parallel and isolate their mutable state.
 9. When publishing, switch from local containers or emulators to managed resources deliberately and verify which services truly need external endpoints.
 
+For test diagnostics, follow the output budget in `references/testing.md`: retain native progress and ANSI, show Warning/Error only plus a final summary, cap diagnostic responses at 80 lines / 8 KiB, and link artifacts instead of dumping logs.
+
 ## Architecture
 
 ```mermaid

@@ -16,10 +16,10 @@ Run only against trusted code. The formatter can restore, compile, and load anal
 
 ```bash
 # Read-only CI/local gate across all applicable formatter surfaces.
-dotnet format MySolution.slnx --verify-no-changes --verbosity diagnostic
+dotnet format MySolution.slnx --verify-no-changes --verbosity quiet
 
 # Apply all configured formatting and fixable diagnostics.
-dotnet format MySolution.slnx --verbosity normal
+dotnet format MySolution.slnx --verbosity quiet
 
 # Limit the operation to one surface.
 dotnet format whitespace MySolution.slnx --verify-no-changes
@@ -59,7 +59,7 @@ dotnet format MySolution.slnx --no-restore --verify-no-changes
 dotnet format MySolution.slnx --report ./artifacts/format-report/
 
 # Capture project/solution loading details when formatter loading fails.
-dotnet format MySolution.slnx --binarylog ./artifacts/format.binlog --verbosity diagnostic
+dotnet format MySolution.slnx --binarylog ./artifacts/format.binlog --verbosity quiet
 ```
 
 ## CI
@@ -71,7 +71,7 @@ Pin the SDK using the repository's `global.json` or CI setup, restore once, and 
   run: dotnet restore MySolution.slnx
 
 - name: Verify .NET formatting
-  run: dotnet format MySolution.slnx --no-restore --verify-no-changes --verbosity diagnostic
+  run: dotnet format MySolution.slnx --no-restore --verify-no-changes --verbosity quiet
 ```
 
 Do not make pull-request CI apply and commit formatter changes. CI should fail with evidence; a developer or authorized automation can apply and review them separately.

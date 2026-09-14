@@ -41,8 +41,15 @@ description: "Write, run, or repair .NET tests that use TUnit. Use when a repo u
 6. Keep tests and test modules parallel. Do not add `--max-parallel-test-modules 1`, `TUNIT_MAX_PARALLEL_TESTS=1`, `[assembly: NotInParallel]`, a class-wide `[NotInParallel]`, or an equivalent global restriction.
 7. Use keyed `[NotInParallel("collision-domain")]` only on the smallest tests that perform destructive changes to the same shared state and can corrupt one another. A shared read-only fixture, expensive startup, module boundary, or vague CI-stability concern is not a reason to limit parallelism.
 8. Run the narrowest useful scope first with `dotnet test ... --treenode-filter "..."` on .NET 10. Use the older `--` separator only when the repository is pinned to an SDK that requires it.
-9. Capture useful failure evidence: host log dumps, focused console output, coverage files, and Playwright screenshots/HTML for UI tests.
+9. Follow `Test Output Budget`: show bounded root-error evidence and link coverage, Playwright screenshots, and HTML artifacts; never dump host logs.
 10. Use `[Test]`, `[Arguments]`, hooks, and dependencies only when they make the scenario clearer, not because the framework allows it.
+
+## Test Output Budget
+
+- Keep native runner progress and ANSI enabled (`--progress on --ansi on` for supported MTP/TUnit runners); use a PTY locally. Do not replay progress redraws into model context. Use the detected runner's flags, not MTP switches on VSTest.
+- Show warnings and errors plus one final summary (counts, duration, exit code). Configure test-owned console logging at `Warning`; keep Information/Debug/Trace, successful-test output, and expected negative-test noise out of context. Quiet build verbosity alone does not filter application logs.
+- On failure, crash, startup error, or timeout, show the failing test/resource, root exception, and relevant stack frames. Deduplicate; cap each diagnostic tool response at 80 lines / 8 KiB, whichever comes first. Never automatically dump stdout/stderr, host logs, browser console history, DOM/HTML, TRX, or crash artifacts.
+- Keep necessary diagnostics in size-bounded or rotating artifacts and link them. Search by exact failure/correlation; read bounded excerpts, never whole logs. Capture/filter noisy output before tool delivery, preserve the real exit code, and disclose truncation. Monitor actual activity; silence alone does not prove a hang.
 
 ## Bootstrap When Missing
 
@@ -78,7 +85,7 @@ If `TUnit` is requested but not configured yet:
 - fixture and shared infrastructure are safe for concurrent consumers; mutable data is isolated per test
 - built-in TUnit analyzers remain active
 - coverage tooling matches Microsoft.Testing.Platform if coverage is enabled
-- UI failures capture artifacts and server-side failures expose enough logs to avoid blind reruns
+- UI failures link artifacts and server-side failures expose bounded root-error excerpts to avoid blind reruns
 
 ## Test Harness
 
@@ -90,7 +97,7 @@ flowchart LR
   B -->|"Host DI / grains / runtime services"| E["Shared Aspire/AppHost fixture + WebApplicationFactory"]
   B -->|"Browser automation"| F["Shared Aspire/AppHost fixture + Playwright"]
   C & D & E & F --> G["Run focused with --treenode-filter"]
-  G --> H["Capture logs, artifacts, and coverage"]
+  G --> H["Show bounded errors and link artifacts"]
 ```
 
 ## Load References

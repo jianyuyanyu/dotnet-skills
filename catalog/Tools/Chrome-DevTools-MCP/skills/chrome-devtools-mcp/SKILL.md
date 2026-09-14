@@ -108,7 +108,7 @@ codex mcp add chrome-devtools -- npx chrome-devtools-mcp@latest
 - `--no-performance-crux`: stop sending performance trace URLs to CrUX
 - `--acceptInsecureCerts`: only when the target environment uses self-signed or expired certs
 - `--allow-unrestricted-paths`: opt out of filesystem path restrictions only for a trusted local workflow that genuinely needs arbitrary path access
-- `--logFile <path>`: capture debug logs for bug reports
+- `--logFile <path>`: opt-in debug artifact for an unresolved bug; keep it size-bounded outside model context and inspect only exact bounded excerpts
 - `--experimentalScreencast`: only when ffmpeg is available and you need video capture
 
 ## Practical Usage Patterns
@@ -119,7 +119,7 @@ codex mcp add chrome-devtools -- npx chrome-devtools-mcp@latest
   - ask the agent to inspect console errors, network failures, and rendering behavior
 - Investigate a flaky UI test:
   - use `--headless --isolated`
-  - capture screenshots and console logs from the failing route
+  - link screenshots and show only relevant Warning/Error console entries from the failing route (at most 80 lines / 8 KiB per diagnostic response); never dump console history
   - compare the result to a known-good run
 - Diagnose performance regressions:
   - keep the full toolset enabled

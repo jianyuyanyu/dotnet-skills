@@ -152,7 +152,7 @@ Reuse the browser process, but never reuse a mutable page or browser context acr
 
 Good TUnit integration suites capture more than just the assertion failure:
 
-- host-side error log dump on HTTP 500 or startup failures
+- bounded root-error excerpt on HTTP 500 or startup failures, following the `SKILL.md` Test Output Budget
 - coverage output such as `coverage.cobertura.xml`
 - screenshots and HTML for Playwright failures
 - narrowed console output from the fixture rather than unfiltered infrastructure noise
@@ -177,22 +177,7 @@ private static async Task CaptureArtifactsAsync(IPage page)
 }
 ```
 
-Example server-log dump pattern:
-
-```csharp
-var logStart = DateTimeOffset.UtcNow;
-
-try
-{
-    var response = await app.CreateApiClient().GetAsync("/health");
-    response.EnsureSuccessStatusCode();
-}
-catch
-{
-    Console.WriteLine(app.GetErrorLogDump(logStart));
-    throw;
-}
-```
+Keep native progress/ANSI visible and console logs at Warning or higher. On failure, show only the test/resource identity, root exception, and relevant stack frames (80 lines / 8 KiB per diagnostic response). Do not add a catch block that prints the complete host log. Keep diagnostic artifacts size-bounded outside model context, link them, and preserve the original exception and runner exit code.
 
 ## Practical Rules
 

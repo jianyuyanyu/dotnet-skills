@@ -6,6 +6,10 @@ compatibility: "Requires a .NET SDK-based repository; respects the repo's `AGENT
 
 # .NET Code Analysis
 
+## Diagnostic Output Budget
+
+Keep warnings/errors and a concise result; avoid routine verbose or diagnostic console output. Preserve native progress/ANSI when running tests. On failure, show only the relevant diagnostic and stack frames, deduplicated and capped at 80 lines / 8 KiB per response. Collect extra diagnostics only for an unresolved problem in size-bounded artifacts outside model context; link them and inspect exact bounded excerpts. Never dump full logs/reports or hide the command exit code through filtering.
+
 ## Trigger On
 
 - the repo wants first-party .NET analyzers

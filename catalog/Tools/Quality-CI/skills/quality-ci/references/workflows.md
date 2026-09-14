@@ -33,10 +33,10 @@ jobs:
         run: dotnet build --no-restore -warnaserror
 
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity quiet
 
       - name: Format check
-        run: dotnet format --verify-no-changes --verbosity diagnostic
+        run: dotnet format --verify-no-changes --verbosity quiet
 ```
 
 ## Full Quality Pipeline with Coverage

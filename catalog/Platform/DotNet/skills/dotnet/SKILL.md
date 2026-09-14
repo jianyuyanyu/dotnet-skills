@@ -41,6 +41,13 @@ compatibility: "Requires a .NET repository, solution, or project tree."
 5. Do not stop at this skill once a narrower match exists. This skill should classify and hand off, not become a generic dumping ground.
 6. After code changes, validate with the repository's actual build, test, and quality workflow instead of generic `.NET` commands.
 
+## Test Output Budget
+
+- Keep native runner progress and ANSI enabled (`--progress on --ansi on` for supported MTP/TUnit runners); use a PTY locally. Do not replay progress redraws into model context. Use the detected runner's flags, not MTP switches on VSTest.
+- Show warnings and errors plus one final summary (counts, duration, exit code). Configure test-owned console logging at `Warning`; keep Information/Debug/Trace, successful-test output, and expected negative-test noise out of context. Quiet build verbosity alone does not filter application logs.
+- On failure, crash, startup error, or timeout, show the failing test/resource, root exception, and relevant stack frames. Deduplicate; cap each diagnostic tool response at 80 lines / 8 KiB, whichever comes first. Never automatically dump stdout/stderr, host logs, browser console history, DOM/HTML, TRX, or crash artifacts.
+- Keep necessary diagnostics in size-bounded or rotating artifacts and link them. Search by exact failure/correlation; read bounded excerpts, never whole logs. Capture/filter noisy output before tool delivery, preserve the real exit code, and disclose truncation. Monitor actual activity; silence alone does not prove a hang.
+
 ## Current Upstream Notes
 
 - `.NET 10.0.11` runtime and ASP.NET Core releases are servicing updates. Re-test affected paths such as cgroup-v2 memory limits, Mono native-library resolution, Windows directory enumeration, WASM AOT/lazy-load startup, thread-static initialization, Blazor persisted circuits, and OpenAPI generation rather than changing architecture by default.

@@ -62,7 +62,7 @@ dotnet run
 - Build once, then re-run focused projects with `--no-build` where the repo supports it.
 - For coverage on Microsoft.Testing.Platform, prefer the repo's documented MTP coverage switches such as `--coverage --coverage-output ...`.
 - Publish human-readable reports separately with ReportGenerator if the pipeline needs HTML or Markdown summaries.
-- For integration/UI suites, capture first-failure evidence: host log dumps, screenshots, and HTML artifacts.
+- For integration/UI suites, follow the `SKILL.md` Test Output Budget: retain progress/ANSI and Warning/Error diagnostics; show bounded first-failure evidence (80 lines / 8 KiB per response) and link screenshots/HTML. Never dump full logs.
 
 ## Good Defaults
 
