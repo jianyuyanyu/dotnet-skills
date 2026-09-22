@@ -978,32 +978,35 @@ def _read_package_links(manifest_path: Path, package_manifest: dict) -> dict[str
 
 @lru_cache(maxsize=1)
 def load_token_counts() -> dict[str, int]:
-    result = subprocess.run(
-        [
-            "dotnet",
-            "run",
-            "-v",
-            "q",
-            "--project",
-            str(CLI_PROJECT),
-            "--",
-            "catalog",
-            "tokens",
-            "--catalog-root",
-            str(ROOT),
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    raw_output = result.stdout.strip()
-    json_payload = raw_output.splitlines()[-1] if raw_output else ""
-    payload = json.loads(json_payload)
-    return {
-        str(item.get("path") or item.get("Path")): int(item.get("tokenCount", item.get("TokenCount", 0)))
-        for item in payload.get("skills", [])
-    }
+    try:
+        result = subprocess.run(
+            [
+                "dotnet",
+                "run",
+                "-v",
+                "q",
+                "--project",
+                str(CLI_PROJECT),
+                "--",
+                "catalog",
+                "tokens",
+                "--catalog-root",
+                str(ROOT),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        raw_output = result.stdout.strip()
+        json_payload = raw_output.splitlines()[-1] if raw_output else ""
+        payload = json.loads(json_payload)
+        return {
+            str(item.get("path") or item.get("Path")): int(item.get("tokenCount", item.get("TokenCount", 0)))
+            for item in payload.get("skills", [])
+        }
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return {}
 
 
 def collect_skills(include_token_counts: bool = False) -> list[dict[str, object]]:

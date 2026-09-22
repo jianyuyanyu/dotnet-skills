@@ -32,7 +32,7 @@ COPYRIGHT_START_YEAR = 2024
 SOCIAL_IMAGE_PATH = "assets/social-card.svg"
 GITHUB_REPOSITORY_URL = "https://github.com/managedcode/dotnet-skills"
 NUGET_PACKAGE_URL = "https://www.nuget.org/packages/dotnet-skills"
-MANAGEDCODE_WEBSITE_URL = "https://www.managed-code.com/"
+MANAGEDCODE_WEBSITE_URL = "https://managed-code.com/"
 
 LEGACY_DIRECT_REDIRECTS = {
     "bundles/core/": "bundles/foundations/",
@@ -1354,7 +1354,7 @@ def render_support_panel(root_prefix: str) -> str:
         <div class="section-header">
           <div>
             <h2>One catalog, multiple coding platforms</h2>
-            <p>The same installable catalog lands in Claude Code, GitHub Copilot, Gemini, Codex, and Junie without inventing a different setup flow for each one.</p>
+            <p>The same installable catalog lands in Claude Code, GitHub Copilot, Gemini, Codex, and Junie without inventing a different setup flow for each one. Looking for production AI engineering? Read about <a href="https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet" target="_blank" rel="noopener noreferrer">building AI agents with .NET</a> or work with our <a href="https://managed-code.com/services/ai-agents" target="_blank" rel="noopener noreferrer">.NET AI agent development team</a>.</p>
           </div>
           {render_panel_links([("About the catalog", f"{root_prefix}about/")])}
         </div>
@@ -1529,6 +1529,7 @@ def select_skill_sections(skill: dict) -> list[tuple[str, str]]:
         "Deliver",
         "Validate",
         "Anti-Patterns",
+        "Documentation",
         "References",
         "Load References",
     ]
@@ -1538,7 +1539,7 @@ def select_skill_sections(skill: dict) -> list[tuple[str, str]]:
         lines = skill["sections"].get(section_name)
         if not lines:
             continue
-        renderer = render_reference_links if section_name in {"References", "Load References"} else render_markdown_lines
+        renderer = render_reference_links if section_name in {"References", "Load References", "Documentation"} else render_markdown_lines
         rendered.append((section_name, renderer(lines)))
 
     return rendered
@@ -1563,6 +1564,20 @@ def select_agent_sections(agent: dict) -> list[tuple[str, str]]:
         rendered.append((section_name, render_markdown_lines(lines)))
 
     return rendered
+
+
+def render_skill_bridge_cta() -> str:
+    """Render the reusable bridge CTA block to Managed Code pillar and services."""
+    return """
+          <section class="agent-bridge-cta">
+            <h2>Building AI agents on .NET?</h2>
+            <p>Managed Code builds production AI agents in C# and .NET.</p>
+            <div class="card-actions">
+              <a class="button button-ghost" href="https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet" target="_blank" rel="noopener noreferrer">building AI agents with .NET</a>
+              <a class="button button-primary" href="https://managed-code.com/services/ai-agents" target="_blank" rel="noopener noreferrer">.NET AI agent development team</a>
+            </div>
+          </section>
+    """.strip()
 
 
 def render_skill_detail_page(skill: dict, related_skills: list[dict], related_agents: list[dict], root_prefix: str) -> str:
@@ -1595,6 +1610,7 @@ def render_skill_detail_page(skill: dict, related_skills: list[dict], related_ag
           {sections_html}
           {'<section><h2>Related skills</h2><div class="directory-grid">' + related_skill_cards + '</div></section>' if related_skill_cards else ''}
           {'<section><h2>Related agents</h2><div class="directory-grid">' + related_agent_cards + '</div></section>' if related_agent_cards else ''}
+          {render_skill_bridge_cta()}
         </div>
 
         <aside class="sidebar-stack">
@@ -1654,6 +1670,7 @@ def render_agent_detail_page(agent: dict, linked_skills: list[dict], root_prefix
               {skill_cards}
             </div>
           </section>
+          {render_skill_bridge_cta()}
         </div>
 
         <aside class="sidebar-stack">
@@ -1753,7 +1770,7 @@ def render_skills_index_page(skills: list[dict], category_infos: dict[str, dict]
           <span class="tag tag-accent">{len(skills)} skills</span>
         </div>
         <h1 class="page-title">Search every <span class="accent">.NET skill</span></h1>
-        <p class="page-lead">This is the full skill directory, with search, collection filters, and a dedicated page for every skill.</p>
+        <p class="page-lead">This is the full skill directory, with search, collection filters, and a dedicated page for every skill. For architecture blueprints and production workflows, explore <a href="https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet" target="_blank" rel="noopener noreferrer">building AI agents with .NET</a> or partner with our <a href="https://managed-code.com/services/ai-agents" target="_blank" rel="noopener noreferrer">.NET AI agent development team</a>.</p>
       </section>
       {render_skill_listing_section(
           skills,
@@ -1849,6 +1866,7 @@ def render_bundle_detail_page(bundle: dict, root_prefix: str) -> str:
             <h2>What this bundle covers</h2>
             <p>{escape_html(bundle["description"])}</p>
           </section>
+          {render_skill_bridge_cta()}
         </div>
         <aside class="sidebar-stack">
           <div class="sidebar-card">
@@ -1988,7 +2006,7 @@ def render_agents_index_page(agents: list[dict], skills: list[dict], root_prefix
           <span class="tag tag-accent">{len(agents)} agents</span>
         </div>
         <h1 class="page-title">Orchestration agents for <span class="accent">broader .NET routing</span></h1>
-        <p class="page-lead">Agent pages sit above individual skills and help route architecture, review, modernization, AI, data, and build work into the right detailed guidance.</p>
+        <p class="page-lead">Agent pages sit above individual skills and help route architecture, review, modernization, AI, data, and build work into the right detailed guidance. Explore our complete guide on <a href="https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet" target="_blank" rel="noopener noreferrer">building AI agents with .NET</a> or collaborate with our <a href="https://managed-code.com/services/ai-agents" target="_blank" rel="noopener noreferrer">.NET AI agent development team</a>.</p>
       </section>
       {render_agent_listing_section(agents, root_prefix, {skill["name"]: skill for skill in skills}, show_index_link=False)}
     """.strip()

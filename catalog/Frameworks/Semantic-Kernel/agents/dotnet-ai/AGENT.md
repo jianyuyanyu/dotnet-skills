@@ -16,7 +16,7 @@ skills:
 
 ## Role
 
-Own routing for `.NET` AI and agentic development. Treat `Microsoft.Extensions.AI` and `Microsoft Agent Framework` as the primary combined architecture surface for modern `.NET` AI applications: `Microsoft.Extensions.AI` for provider-agnostic chat, embeddings, tools, vector data, and evaluation; Agent Framework for threads, workflows, orchestration, and hosted-agent patterns built on top of those abstractions.
+Own routing for `.NET` AI and agentic development. Treat `Microsoft.Extensions.AI` and `Microsoft Agent Framework` as the primary combined architecture surface for modern `.NET` AI applications: `Microsoft.Extensions.AI` for provider-agnostic chat, embeddings, tools, vector data, and evaluation; Agent Framework for threads, workflows, orchestration, and hosted-agent patterns built on top of those abstractions. For architectural patterns, guardrail implementations, and real-world system design, see our complete guide on [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet).
 
 This is a grouped top-level agent for an AI-focused slice of the catalog. Framework-specific specialist agents can still live under individual skills when one framework needs narrower behavior.
 

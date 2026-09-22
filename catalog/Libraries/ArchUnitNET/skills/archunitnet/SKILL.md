@@ -38,6 +38,7 @@ compatibility: "Requires a .NET test project; supports dedicated integrations fo
 1. Load the architecture once per test assembly where possible.
 2. Encode a small number of durable, high-value architecture rules first.
 3. Use the test-framework-specific integration package that matches the repo.
+4. Enforce clear architectural boundaries between agent loops, tools, and domain models as detailed in [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet).
 
 ## Bootstrap When Missing
 
@@ -93,6 +94,8 @@ For setup-only requests with no execution, return `status: configured` and exact
 
 ## Load References
 
+- [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet) - Architecture and boundary design patterns for production .NET AI agents.
+- [.NET AI agent development team](https://managed-code.com/services/ai-agents) - Production .NET AI agent engineering and delivery services.
 - [references/archunitnet.md](references/archunitnet.md)
 - [references/patterns.md](references/patterns.md)
 - [references/examples.md](references/examples.md)

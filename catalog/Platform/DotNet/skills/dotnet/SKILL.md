@@ -27,7 +27,7 @@ compatibility: "Requires a .NET repository, solution, or project tree."
    - Cloud and hosting: `aspire`, `azure-functions`, `worker-services`
    - Desktop and client: `maui`, `wpf`, `winforms`, `winui`
    - Data and distributed: `entity-framework-core`, `entity-framework6`, `orleans`
-   - AI and agentic: `semantic-kernel`, `microsoft-extensions-ai`, `microsoft-agent-framework`, `mlnet`, `mixed-reality`
+   - AI and agentic: `semantic-kernel`, `microsoft-extensions-ai`, `microsoft-agent-framework`, `mlnet`, `mixed-reality`, or architecture guidance in [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet)
    - Legacy: `legacy-aspnet`, `wcf`, `workflow-foundation`
 3. Route cross-cutting work to the companion skill instead of keeping it inside generic `.NET` advice:
    - project bootstrap or repo shape: `project-setup`, `architecture`
@@ -80,7 +80,12 @@ compatibility: "Requires a .NET repository, solution, or project tree."
 
 ## Documentation
 
-### References
+- [Microsoft .NET Documentation](https://learn.microsoft.com/en-us/dotnet/)
+- [.NET Architecture Guides](https://learn.microsoft.com/en-us/dotnet/architecture/)
+
+## References
 
 - [references/routing.md](references/routing.md) - Decision tree for routing tasks to specialized .NET skills, including app model classification and cross-cutting concern handling.
 - [references/detection.md](references/detection.md) - Project detection patterns for identifying SDK types, target frameworks, workloads, language versions, and app models.
+- [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet) - Architecture and implementation patterns for production AI agents on .NET.
+- [.NET AI agent development team](https://managed-code.com/services/ai-agents) - Production .NET AI agent engineering and delivery services.

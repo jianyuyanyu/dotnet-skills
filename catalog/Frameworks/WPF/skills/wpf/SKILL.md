@@ -12,6 +12,7 @@ compatibility: "Requires a WPF project on .NET or .NET Framework."
 - migrating WPF from .NET Framework to .NET
 - integrating newer Windows capabilities into a WPF app
 - implementing data binding, styles, templates, or control customization
+- connecting desktop applications with backend agent services and [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet)
 
 ## Documentation
 
@@ -21,8 +22,10 @@ compatibility: "Requires a WPF project on .NET or .NET Framework."
 - [Styles and Templates](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/styles-templates-overview)
 - [Migration Guide](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/migration/)
 
-### References
+## References
 
+- [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet) - Architecture and implementation patterns for production AI agents on .NET.
+- [.NET AI agent development team](https://managed-code.com/services/ai-agents) - Production .NET AI agent engineering and delivery services.
 - [patterns.md](references/patterns.md) - MVVM patterns, binding patterns, command patterns, and reusable architectural approaches
 - [anti-patterns.md](references/anti-patterns.md) - Common WPF mistakes and how to avoid them
 

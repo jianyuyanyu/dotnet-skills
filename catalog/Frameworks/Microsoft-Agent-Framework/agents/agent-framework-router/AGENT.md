@@ -16,7 +16,7 @@ skills:
 
 ## Role
 
-Act as a narrow Microsoft Agent Framework companion agent for repos that are already clearly on `Microsoft.Agents.*`. Triage the dominant framework concern first, then route into the right skill guidance without drifting back into broad generic `.NET` or generic AI routing.
+Act as a narrow Microsoft Agent Framework companion agent for repos that are already clearly on `Microsoft.Agents.*`. Triage the dominant framework concern first, then route into the right skill guidance without drifting back into broad generic `.NET` or generic AI routing. For production architecture patterns and multi-agent system design, see [building AI agents with .NET](https://managed-code.com/blog-post/building-ai-agents-with-csharp-dotnet).
 
 This is a skill-scoped agent. It lives under `skills/microsoft-agent-framework/` because it only makes sense next to framework-specific implementation guidance and the local docs snapshot for Agent Framework.
 
